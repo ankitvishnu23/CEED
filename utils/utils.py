@@ -1,0 +1,319 @@
+import os
+import shutil
+
+import torch
+import torch.nn as nn
+import torch.distributed as dist
+from classy_vision.generic.distributed_util import (
+    convert_to_distributed_tensor,
+    convert_to_normal_tensor,
+    is_distributed_training_run,
+)
+import numpy as np
+from pathlib import Path
+from tqdm.auto import tqdm, trange
+import pandas as pd
+import shutil
+from sklearn.decomposition import PCA
+
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.model_selection import GridSearchCV
+from sklearn.mixture import GaussianMixture
+from sklearn.metrics import adjusted_rand_score
+
+# import matplotlib.pyplot as plt
+import yaml
+import torch.nn.functional as F
+
+import sys
+
+class GatherLayer(torch.autograd.Function):
+    """
+    Gather tensors from all workers with support for backward propagation:
+    This implementation does not cut the gradients as torch.distributed.all_gather does.
+    """
+
+    @staticmethod
+    def forward(ctx, x):
+        output = [torch.zeros_like(x) for _ in range(dist.get_world_size())]
+        dist.all_gather(output, x)
+        return tuple(output)
+
+    @staticmethod
+    def backward(ctx, *grads):
+        all_gradients = torch.stack(grads)
+        dist.all_reduce(all_gradients)
+        return all_gradients[dist.get_rank()]
+
+
+def gather_from_all(tensor: torch.Tensor) -> torch.Tensor:
+    """
+    Similar to classy_vision.generic.distributed_util.gather_from_all
+    except that it does not cut the gradients
+    """
+    if tensor.ndim == 0:
+        # 0 dim tensors cannot be gathered. so unsqueeze
+        tensor = tensor.unsqueeze(0)
+
+    if is_distributed_training_run():
+        tensor, orig_device = convert_to_distributed_tensor(tensor)
+        gathered_tensors = GatherLayer.apply(tensor)
+        gathered_tensors = [
+            convert_to_normal_tensor(_tensor, orig_device)
+            for _tensor in gathered_tensors
+        ]
+    else:
+        gathered_tensors = [tensor]
+    gathered_tensor = torch.cat(gathered_tensors, 0)
+    return gathered_tensor
+
+
+class AverageMeter(object):
+    """Computes and stores the average and current value"""
+    def __init__(self, name, fmt=':f'):
+        self.name = name
+        self.fmt = fmt
+        self.reset()
+
+    def reset(self):
+        self.val = 0
+        self.avg = 0
+        self.sum = 0
+        self.count = 0
+
+    def update(self, val, n=1):
+        self.val = val
+        self.sum += val * n
+        self.count += n
+        self.avg = self.sum / self.count
+
+    def __str__(self):
+        fmtstr = '{name} {val' + self.fmt + '} ({avg' + self.fmt + '})'
+        return fmtstr.format(**self.__dict__)
+
+def accuracy(output, target, topk=(1,)):
+    """Computes the accuracy over the k top predictions for the specified values of k"""
+    with torch.no_grad():
+        maxk = max(topk)
+        batch_size = target.size(0)
+
+        _, pred = output.topk(maxk, 1, True, True)
+        pred = pred.t()
+        correct = pred.eq(target.view(1, -1).expand_as(pred))
+
+        res = []
+        for k in topk:
+            correct_k = correct[:k].reshape(-1).float().sum(0, keepdim=True)
+            res.append(correct_k.mul_(100.0 / batch_size))
+        return res
+    
+def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
+    torch.save(state, filename)
+    if is_best:
+        shutil.copyfile(filename, 'model_best.pth.tar')
+
+
+def save_config_file(model_checkpoints_folder, args):
+    if not os.path.exists(model_checkpoints_folder):
+        os.makedirs(model_checkpoints_folder)
+        with open(os.path.join(model_checkpoints_folder, 'config.yml'), 'w') as outfile:
+            yaml.dump(args, outfile, default_flow_style=False)
+
+
+def get_backbone(enc):
+    last_layer = list(list(enc.children())[-1].children())[:-1]
+    enc.fcpart = nn.Sequential(*last_layer)
+    return enc
+
+
+def get_contr_representations(model, data_set, device):
+    reps = []
+    for item in data_set:
+        with torch.no_grad():
+            wf = torch.from_numpy(item.reshape(1, 1, -1)).to(device)
+            rep = model(wf)
+        reps.append(rep.detach().cpu().numpy())    
+    return np.squeeze(np.array(reps))
+
+
+def get_torch_reps(net, data_loader, device, args):
+    feature_bank = []
+    feature_labels = torch.tensor([])
+    with torch.no_grad():
+        # generate feature bank
+        for data, target in data_loader:
+            if args.use_chan_pos:
+                data, chan_pos = data
+            else:
+                chan_pos = None
+                
+            if args.use_gpt:
+                data = data.view(-1, (args.num_extra_chans*2+1)*121) if args.multi_chan else torch.squeeze(data, dim=1)
+                if args.use_chan_pos:
+                    feature = net(data.to(device=device, non_blocking=True).unsqueeze(dim=-1), chan_pos=chan_pos.to(device=device, non_blocking=True))
+                else:
+                    feature = net(data.to(device=device, non_blocking=True).unsqueeze(dim=-1))
+            else:
+                feature = net(data.to(device=device, non_blocking=True))
+                feature = torch.squeeze(feature)
+            feature = F.normalize(feature, dim=1)
+            feature_bank.append(feature)
+            feature_labels = torch.cat((feature_labels, target))
+        # [D, N]
+        feature_bank = torch.cat(feature_bank, dim=0).cpu().numpy()
+        # [N]
+        feature_labels = feature_labels.cpu().numpy()
+    
+    return feature_bank, feature_labels
+
+
+# knn monitor as in InstDisc https://arxiv.org/abs/1805.01978
+# implementation follows http://github.com/zhirongw/lemniscate.pytorch and https://github.com/leftthomas/SimCLR
+def knn_predict(feature, feature_bank, feature_labels, classes, knn_k, knn_t):
+    # compute cos similarity between each feature vector and feature bank ---> [B, N]
+    sim_matrix = torch.mm(feature, feature_bank)
+    # [B, K]
+    sim_weight, sim_indices = sim_matrix.topk(k=knn_k, dim=-1)
+    # [B, K]
+    sim_labels = torch.gather(feature_labels.expand(feature.size(0), -1), dim=-1, index=sim_indices)
+    sim_weight = (sim_weight / knn_t).exp()
+
+    # counts for each class
+    one_hot_label = torch.zeros(feature.size(0) * knn_k, classes, device=sim_labels.device)
+    # [B*K, C]
+    one_hot_label = one_hot_label.scatter(dim=-1, index=sim_labels.view(-1, 1), value=1.0)
+    # weighted score ---> [B, C]
+    pred_scores = torch.sum(one_hot_label.view(feature.size(0), -1, classes) * sim_weight.unsqueeze(dim=-1), dim=1)
+
+    pred_labels = pred_scores.argsort(dim=-1, descending=True)
+    return pred_labels
+
+
+# GMM fitting to data for validation
+def gmm_monitor(net, memory_data_loader, test_data_loader, device='cuda', hide_progress=False, epoch_num=0,
+                targets=None, args=None):
+    if not targets:
+        targets = memory_data_loader.dataset.targets
+
+    net.eval()
+    classes = test_data_loader.dataset.num_classes
+
+    num_iters = 50 if epoch_num == args.epochs-1 else 1
+
+    scores = []
+    for i in range(num_iters):
+        # covariance_type : {'full', 'tied', 'diag', 'spherical'}
+        covariance_type = 'full'
+        reps_train, labels_train = get_torch_reps(net, memory_data_loader, device, args)
+        reps_test, labels_test = get_torch_reps(net, test_data_loader, device, args)
+        gmm = GaussianMixture(classes,
+                            random_state=random.randint(0, 1000000),
+                            covariance_type=covariance_type).fit(reps_train)
+        gmm_cont_test_labels = gmm.predict(reps_test)
+        curr_score = adjusted_rand_score(labels_test, gmm_cont_test_labels)*100
+        scores.append(curr_score)
+        if i == 49:
+           print("max gmm score: {}".format(max(scores)))
+           print("min gmm score: {}".format(min(scores)))
+           print("50 run gmm mean score: {}".format(np.mean(scores)))
+           print("50 run gmm std-dev score: {}".format(np.std(scores)))
+
+    score = np.mean(scores)
+
+    return score
+
+
+# test using a knn monitor
+def knn_monitor(net, memory_data_loader, test_data_loader, device='cuda', k=200, t=0.1, hide_progress=False,
+                targets=None, args=None):
+    if not targets:
+        targets = memory_data_loader.dataset.targets
+
+    net.eval()
+    classes = test_data_loader.dataset.num_classes
+    # classes = len(memory_data_loader.dataset.classes)
+    total_top1, total_top5, total_num, feature_bank = 0.0, 0.0, 0, []
+    with torch.no_grad():
+        # generate feature bank
+        for data, target in memory_data_loader:
+            if not args.multi_chan:
+                if args.use_gpt:
+                    data = torch.squeeze(data, dim=1)
+                    data = torch.unsqueeze(data, dim=-1)
+            else:
+                if args.use_chan_pos:
+                    data, chan_pos = data
+                data = data.view(-1, int(args.num_extra_chans*2+1)*121)
+                data = torch.unsqueeze(data, dim=-1)
+            
+            if args.use_chan_pos:
+                feature = net(data.to(device=device, non_blocking=True), chan_pos=chan_pos.to(device=device, non_blocking=True))
+            else:
+                feature = net(data.to(device=device, non_blocking=True))
+            feature = torch.squeeze(feature)
+            feature = F.normalize(feature, dim=1)
+            feature_bank.append(feature)
+        # [D, N]
+        feature_bank = torch.cat(feature_bank, dim=0).t().contiguous()
+        # [N]
+        feature_labels = torch.tensor(targets, device=feature_bank.device)
+        
+        # loop test data to predict the label by weighted knn search
+        for data, target in test_data_loader:
+            
+            target = target.to(device=device, non_blocking=True)
+            if not args.multi_chan:
+                data = torch.squeeze(data, dim=1)
+                data = torch.unsqueeze(data, dim=-1)
+            else:
+                if args.use_chan_pos:
+                    data, chan_pos = data
+                else:
+                    chan_pos = None
+                data = data.view(-1, int(args.num_extra_chans*2+1)*121)
+                data = torch.unsqueeze(data, dim=-1)
+                
+            if args.use_chan_pos:
+                feature = net(data.to(device=device, non_blocking=True), chan_pos=chan_pos.to(device=device, non_blocking=True))
+            else:
+                feature = net(data.to(device=device, non_blocking=True))
+            feature = torch.squeeze(feature)
+            feature = F.normalize(feature, dim=1)
+
+            pred_labels = knn_predict(feature, feature_bank, feature_labels, classes, k, t)
+
+            total_num += data.size(0)
+            total_top1 += (pred_labels[:, 0] == target).float().sum().item()
+    return total_top1 / total_num * 100
+
+
+def save_reps(model, loader, ckpt_path, split='train', multi_chan=False,rep_after_proj=False, use_chan_pos=False, suffix=''):
+    ckpt_root_dir = '/'.join(ckpt_path.split('/')[:-1])
+    model.eval()
+    feature_bank = []
+    with torch.no_grad():
+        for data, target in loader:
+            if not multi_chan:
+                data = torch.squeeze(data, dim=1)
+                data = torch.unsqueeze(data, dim=-1)
+            else:
+                if use_chan_pos:
+                    data,chan_pos = data
+
+                data = data.view(-1, 11*121)
+                data = torch.unsqueeze(data, dim=-1)
+            
+            if use_chan_pos:
+                feature = model(data.cuda(non_blocking=True), chan_pos=chan_pos.cuda(non_blocking=True))
+            else:
+                feature = model(data.cuda(non_blocking=True))
+            feature_bank.append(feature)
+            
+        feature_bank = torch.cat(feature_bank, dim=0)
+        print(feature_bank.shape)
+        if rep_after_proj:
+            torch.save(feature_bank, os.path.join(ckpt_root_dir, f'{split}_aftproj_reps{suffix}.pt'))
+            print(f"saved {split} features to {ckpt_root_dir}/{split}_aftproj_reps{suffix}.pt")
+        else:
+            torch.save(feature_bank, os.path.join(ckpt_root_dir, f'{split}_reps{suffix}.pt'))
+            print(f"saved {split} features to {ckpt_root_dir}/{split}_reps{suffix}.pt")
