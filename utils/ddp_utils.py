@@ -12,7 +12,7 @@ import torch.nn.functional as F
 
 from sklearn.mixture import GaussianMixture
 from sklearn.metrics import adjusted_rand_score
-from utils import get_torch_reps
+from utils.utils import get_torch_reps
 
 class GatherLayer(torch.autograd.Function):
     """

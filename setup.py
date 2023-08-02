@@ -6,9 +6,12 @@ version = None
 install_requires = [
     "black",
     "colorcet",
+    "classy_vision",
+    # "dartsort",
     "hdbscan",
     "imgaug",
     "matplotlib",
+    "MEArec",
     "opencv-python",
     "pandas",
     "pillow",

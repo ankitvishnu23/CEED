@@ -1,6 +1,6 @@
 import torch
 from data_aug.contrastive_learning_dataset import ContrastiveLearningDataset, WFDataset_lab
-from models.model_GPT import GPTConfig, Multi_GPT, Single_GPT, Projector
+from ceed.models.model_GPT import GPTConfig, Multi_GPT, Single_GPT, Projector
 from data_aug.wf_data_augs import Crop
 import os
 

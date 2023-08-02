@@ -11,9 +11,9 @@ import torch.backends.cudnn as cudnn
 from torchvision import models
 from data_aug.contrastive_learning_dataset import ContrastiveLearningDataset, WFDataset_lab
 from data_aug.wf_data_augs import Crop
-from models.model_simclr import ModelSimCLR, Projector, Projector2
+from ceed.models.model_simclr import ModelSimCLR, Projector, Projector2
 from ceed.simclr import SimCLR
-from models.model_GPT import GPTConfig, Single_GPT
+from ceed.models.model_GPT import GPTConfig, Single_GPT
 from torch.nn.parallel import DistributedDataParallel as DDP
 
 

@@ -11,15 +11,15 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.cuda.amp import GradScaler, autocast
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
-from utils import (
+from utils.utils import (
     save_config_file, save_checkpoint,
     knn_monitor, gmm_monitor
 )      
-from ddp_utils import gather_from_all
+from utils.ddp_utils import gather_from_all
 import tensorboard_logger as tb_logger
 torch.manual_seed(0)
 import time
-from load_models import save_reps
+from utils.load_models import save_reps
 
 class SimCLR(object):
 
