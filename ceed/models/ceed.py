@@ -23,7 +23,7 @@ class CEED(object):
         self,
         model_arch: str = "fc_encoder",
         out_dim: int = 5,
-        proj_dim: int = 2,
+        proj_dim: int = 5,
         num_extra_chans: int = 0,
         gpu: int = 0
     ):
@@ -70,7 +70,7 @@ class CEED(object):
 
         dataset_name = 'wf_multichan' if self.multi_chan else 'wf'
 
-        train_dataset = dataset.get_dataset(dataset_name, 2, 1.0, self.num_extra_chans, normalize=self.cell_type, detected_spikes=False)
+        train_dataset = dataset.get_dataset(dataset_name, 2, 1.0, self.num_extra_chans, normalize=cell_type, detected_spikes=False)
         train_loader = torch.utils.data.DataLoader(
             train_dataset, batch_size=batch_size, shuffle=True,
             num_workers=8, pin_memory=True, drop_last=True)
