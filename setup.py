@@ -5,18 +5,22 @@ version = None
 
 install_requires = [
     "black",
+    "colorcet",
+    "hdbscan",
     "imgaug",
     "matplotlib",
     "opencv-python",
     "pandas",
     "pillow",
     "scikit-image",
-    "sklearn",
+    "scikit-learn",
+    "spikeinterface",
     "tensorboard_logger",
     "tensorboard",
     "torchtyping",
     "torchvision",
     "typeguard",
+    "umap-learn",
 ]
 
 

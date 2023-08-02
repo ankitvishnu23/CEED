@@ -4,7 +4,7 @@ import torch.nn as nn
 import torchvision.models as models
 from torch.nn import TransformerEncoder, TransformerEncoderLayer
 
-from exceptions.exceptions import InvalidBackboneError
+from ceed.models.exceptions import InvalidBackboneError
 from collections import OrderedDict
 import sys
 
