@@ -1,7 +1,9 @@
 import umap.umap_ as umap
 from sklearn.decomposition import PCA
+from ceed.models.model_simclr import SingleChanDenoiser
 from tqdm import tqdm
 import numpy as np
+import torch
 
 def learn_manifold_umap(data, umap_dim, umap_min_dist=0.2, umap_metric='euclidean', umap_neighbors=10):
     md = float(umap_min_dist)
@@ -18,12 +20,18 @@ def pca(S, n_comps):
     pca_ = PCA(n_components=n_comps, whiten=True)
     return pca_.fit_transform(S), pca_.explained_variance_ratio_, pca_
 
-def get_flattened_data(dataset):
+def get_flattened_data(dataset, denoise=False, denoise_path=''):
+    if denoise:
+        denoiser = SingleChanDenoiser().load(denoise_path)
     wfs_full = []
     labels_full = []
     for i in tqdm(range(len(dataset))):
-        curr_wf, curr_label = dataset[i].astype('float32')
-        curr_wf = curr_wf.flatten().squeeze()
+        curr_wf, curr_label = dataset[i]
+        if denoise:
+            with torch.no_grad():
+                for j in range(curr_wf.shape[0]):
+                    curr_wf[j] = denoiser(torch.from_numpy(curr_wf[j].reshape(1, 121))).cpu().numpy()
+        curr_wf = curr_wf.flatten().squeeze().astype('float32')
         wfs_full.append(curr_wf)
         labels_full.append(curr_label)
     wfs_full = np.array(wfs_full)

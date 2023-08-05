@@ -148,7 +148,7 @@ class CEED(object):
         self.model.load_state_dict(ckpt['state_dict'])
     
 
-    def get_representations(self, data_dir, use_chan_pos):
+    def transform(self, data_dir, use_chan_pos):
         if self.multi_chan:
             dataset = WFDataset_lab(data_dir, split='train', multi_chan=self.multi_chan, transform=Crop(prob=0.0, num_extra_chans=self.num_extra_chans, ignore_chan_num=True), use_chan_pos=use_chan_pos)
             loader = torch.utils.data.DataLoader(
