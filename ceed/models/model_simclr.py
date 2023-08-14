@@ -278,7 +278,7 @@ class _Skip(nn.Module):
 
 class CEBRA(nn.Module):
     def __init__(self, num_units=32, out_size = 2, proj_dim=5, fc_depth=2, input_size=121, multichan=False):
-        super(Encoder, self).__init__()
+        super(CEBRA, self).__init__()
         print("init CEBRA Encoder")
         self.proj_dim = out_size if out_size < proj_dim else proj_dim
         self.multichan = multichan

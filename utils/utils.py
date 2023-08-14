@@ -201,6 +201,8 @@ def gmm_monitor(net, memory_data_loader, test_data_loader, device='cuda', hide_p
     num_iters = 50 if epoch_num == args.epochs-1 else 1
 
     scores = []
+    np.random.seed(0)
+    random.seed(0)
     for i in range(num_iters):
         # covariance_type : {'full', 'tied', 'diag', 'spherical'}
         covariance_type = 'full'

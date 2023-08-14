@@ -20,6 +20,7 @@ install_requires = [
     "spikeinterface",
     "tensorboard_logger",
     "tensorboard",
+    "tensorflow",
     "torchtyping",
     "torchvision",
     "typeguard",

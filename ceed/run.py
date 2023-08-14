@@ -64,7 +64,7 @@ def main_worker(gpu, args):
     # define memory and test dataset for knn monitoring
     if not args.ddp and not args.no_knn:
         if args.multi_chan:
-            memory_dataset = WFDataset_lab(args.data, split='train', multi_chan=args.multi_chan, transform=Crop(prob=0.0, num_extra_chans=num_extra_chans, ignore_chan_num=True), use_chan_pos=args.use_chan_pos)
+            memory_dataset = WFDataset_lab(args.data, split='val', multi_chan=args.multi_chan, transform=Crop(prob=0.0, num_extra_chans=num_extra_chans, ignore_chan_num=True), use_chan_pos=args.use_chan_pos)
             memory_loader = torch.utils.data.DataLoader(
                 memory_dataset, batch_size=128, shuffle=False,
                 num_workers=args.workers, pin_memory=True, drop_last=False)
