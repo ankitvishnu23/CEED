@@ -14,6 +14,7 @@ from pathlib import Path
 from tqdm.auto import tqdm, trange
 import pandas as pd
 import shutil
+import random
 from sklearn.decomposition import PCA
 
 from sklearn.neighbors import KNeighborsClassifier
@@ -203,11 +204,11 @@ def gmm_monitor(net, memory_data_loader, test_data_loader, device='cuda', hide_p
     scores = []
     np.random.seed(0)
     random.seed(0)
+    reps_train, labels_train = get_torch_reps(net, memory_data_loader, device, args)
+    reps_test, labels_test = get_torch_reps(net, test_data_loader, device, args)
     for i in range(num_iters):
         # covariance_type : {'full', 'tied', 'diag', 'spherical'}
         covariance_type = 'full'
-        reps_train, labels_train = get_torch_reps(net, memory_data_loader, device, args)
-        reps_test, labels_test = get_torch_reps(net, test_data_loader, device, args)
         gmm = GaussianMixture(classes,
                             random_state=random.randint(0, 1000000),
                             covariance_type=covariance_type).fit(reps_train)
