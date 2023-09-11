@@ -508,7 +508,7 @@ class TorchToWfTensor(object):
             
         if len(wf.shape) == 1:
             wf = np.expand_dims(wf, axis=0)
-        
+    
         if len(sample) == 3:
             return torch.from_numpy(wf.astype('float16')), chan_nums, chan_locs
         elif len(sample) == 2:

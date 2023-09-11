@@ -8,7 +8,7 @@ from torchvision import transforms, datasets
 from torch.utils.data import Dataset
 from data_aug.view_generator import ContrastiveLearningViewGenerator, LabelViewGenerator
 # from exceptions.exceptions import InvalidDatasetSelection
-from data_aug.wf_data_augs import AmpJitter, Jitter, Collide, SmartNoise, ToWfTensor, PCA_Reproj, Crop
+from data_aug.wf_data_augs import AmpJitter, Jitter, Collide, SmartNoise, ToWfTensor, PCA_Reproj, Crop, TorchToWfTensor
 from typing import Any, Callable, Optional, Tuple
 
 class WFDataset(Dataset):
@@ -253,11 +253,11 @@ class ContrastiveLearningDataset:
                                             transforms.RandomApply([Collide(self.root_folder, multi_chan=self.multi_chan)], p=0.4),
                                             Crop(prob=p_crop, num_extra_chans=num_extra_chans),
                                             transforms.RandomApply([AmpJitter()], p=0.7),
-                                            transforms.RandomApply([Jitter()], p=0.6),
+                                              transforms.RandomApply([Jitter()], p=0.6),
                                             #   transforms.RandomApply([PCA_Reproj(root_folder=self.root_folder)], p=0.4),
-                                            transforms.RandomApply([SmartNoise(self.root_folder, temporal_cov, 
-                                                                                 spatial_cov, noise_scale, normalize)], p=0.5),
-                                            ToWfTensor()])
+                                            #   transforms.RandomApply([SmartNoise(self.root_folder, temporal_cov, 
+                                            #                                      spatial_cov, noise_scale, normalize)], p=0.5),
+                                              TorchToWfTensor()])
         
         return data_transforms
 

@@ -172,14 +172,15 @@ class CEED(object):
         else:
             start_epoch = 0
 
-        args = SimpleNamespace(ddp=False, rank=0, log_dir=log_dir, 
+        args = SimpleNamespace(data=data_dir, ddp=False, rank=0, log_dir=log_dir, 
                                multi_chan=self.multi_chan, n_views=2, 
                                fp16=True, epochs=epochs, add_train=True, 
                                use_chan_pos=use_chan_pos, use_gpt=self.ddp,
                                online_head=False, eval_knn_every_n_epochs=1,
                                no_knn=save_metrics, checkpoint_dir=checkpoint_dir, 
                                num_extra_chans=self.num_extra_chans, 
-                               disable_cuda=False, temperature=0.07, arch=self.arch)
+                               disable_cuda=False, temperature=0.07, arch=self.arch,
+                               noise_scale=1.0, cell_type=cell_type, gpu=gpu)
         
         print("starting training...")
     
