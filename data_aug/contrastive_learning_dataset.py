@@ -92,7 +92,7 @@ class WF_MultiChan_Dataset(Dataset):
     def __init__(
         self,
         root: str,
-        use_chan_pos: bool = False, 
+        use_chan_pos: bool = False,
         transform: Optional[Callable] = None,
         target_transform: Optional[Callable] = None,
         detected_spikes: bool = False
@@ -142,7 +142,9 @@ class WF_MultiChan_Dataset(Dataset):
         if self.transform is not None and self.use_chan_pos:
             wf, chan_loc = self.transform([wf, chan_nums, chan_loc])
         elif self.transform is not None:
-            wf = self.transform([wf, chan_nums])
+            ret_obj = self.transform([wf, chan_nums])
+            wf = [ret_obj[0][0], ret_obj[1][0]]
+            chan_nums = [ret_obj[0][1], ret_obj[1][1]]
 
         if self.target_transform is not None:
             y = self.target_transform(y)
@@ -150,7 +152,7 @@ class WF_MultiChan_Dataset(Dataset):
         if self.use_chan_pos:
             return [wf, chan_loc], y
             
-        return wf, y
+        return wf, chan_nums, y
 
 
     def __len__(self) -> int:
