@@ -177,7 +177,7 @@ class CEED(object):
                                fp16=True, epochs=epochs, add_train=True, 
                                use_chan_pos=use_chan_pos, use_gpt=self.ddp,
                                online_head=False, eval_knn_every_n_epochs=1,
-                               no_knn=save_metrics, checkpoint_dir=checkpoint_dir, 
+                               no_knn=(not save_metrics), checkpoint_dir=checkpoint_dir, 
                                num_extra_chans=self.num_extra_chans, 
                                disable_cuda=False, temperature=0.07, arch=self.arch,
                                noise_scale=1.0, cell_type=cell_type, gpu=gpu)
