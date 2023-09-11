@@ -12,6 +12,8 @@ import numpy as np
 from scipy.spatial.distance import pdist, squareform
 from matplotlib.gridspec import GridSpec
 from tqdm import tqdm
+import torch
+from pathlib import Path
 
 try:
     from brainbox.io.one import SpikeSortingLoader
@@ -22,12 +24,13 @@ except ImportError:
     print("Failed to import IBL packages (brainbox, ibllib, one, brainbox")
     
 import datetime
-from spike_psvae.subtract import read_geom_from_meta
-from pathlib import Path
-from spike_psvae.waveform_utils import make_channel_index, make_contiguous_channel_index
-from spike_psvae import denoise, snr_templates, spike_train_utils
-import torch
-from spike_psvae.spikeio import read_waveforms
+try:
+    from spike_psvae.subtract import read_geom_from_meta
+    from spike_psvae.waveform_utils import make_channel_index, make_contiguous_channel_index
+    from spike_psvae import denoise, snr_templates, spike_train_utils
+    from spike_psvae.spikeio import read_waveforms
+except ImportError:
+    print("Failed to import spike-psvae/dartsort functions")
 
 def kill_signal(recordings, threshold, window_size):
     """

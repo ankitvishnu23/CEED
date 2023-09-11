@@ -19,6 +19,9 @@ from ceed.models.model_GPT import GPTConfig, Single_GPT
 from torch.nn.parallel import DistributedDataParallel as DDP
 
 class CEED(object):
+    """
+        CEED object that can be trained, loaded from checkpoint, and can be used to get low-d representations of ephys data.
+    """
     def __init__(
         self,
         model_arch: str = "fc_encoder",
@@ -27,26 +30,42 @@ class CEED(object):
         num_extra_chans: int = 0,
         gpu: int = 0
     ):
+        """
+        Parameters
+        ----------
+        model_arch : str
+            The type of model being trained or loaded (fc_encoder, attention_enc)
+        out_dim : int
+            The size of the representation layer before the projection head
+        proj_dim : int
+            The size of the representation layer after the projection head
+        num_extra_chans : int
+            The number of channels to use on each side of the max amplitude channel for training and getting representations
+        gpu : int
+            The index of the cuda device being used by the CEED model
+        """
+
         self.multi_chan = True if num_extra_chans > 1 else False
         self.ddp = True if model_arch == "gpt" else False
         self.out_dim = out_dim
         self.num_extra_chans = num_extra_chans
+        self.arch = model_arch
 
-        if model_arch == "gpt":
+        if self.arch == "gpt":
             model_args = dict(n_layer=20, n_head=4, n_embd=32, block_size=1024,
                     bias=True, vocab_size=50304, dropout=0.0, out_dim=out_dim, is_causal=True, 
                     proj_dim=proj_dim, pos='seq_11times', multi_chan=self.multi_chan) 
             gptconf = GPTConfig(**model_args)
             self.model = Single_GPT(gptconf).cuda(gpu)
         else:
-            self.model = ModelSimCLR(base_model=model_arch, out_dim=out_dim, proj_dim=proj_dim, 
+            self.model = ModelSimCLR(base_model=self.arch, out_dim=out_dim, proj_dim=proj_dim, 
                 fc_depth=2, expand_dim=False, multichan=self.multi_chan, input_size=(2*num_extra_chans+1)*121).cuda(gpu)
 
 
     def train(
         self,
         data_dir,
-        exp,
+        exp_name,
         log_dir,
         ckpt_dir,
         gpu: int = 0,
@@ -55,11 +74,41 @@ class CEED(object):
         batch_size: int = 256,
         optimizer: str = 'adam',
         cell_type: bool = False,
-        plot_metrics: bool = False,
+        save_metrics: bool = False,
         use_chan_pos: bool = False,
     ):
-        checkpoint_dir = os.path.join(ckpt_dir, exp)
-        log_dir = os.path.join(log_dir, exp)
+        """Trains a CEED model
+
+        Parameters
+        ----------
+        data_dir : str
+            The absolute path location of the CEED neural ephys dataset.
+        exp_name : str
+            The name of the experiment - folder with this name will be created in log_dir and ckpt_dir. 
+        log_dir : str
+            The absolute path location to which logs will be stored. 
+        ckpt_dir : str
+            The absolute path location to which ckpts will be saved or from which ckpts will be restored. 
+        gpu : int
+            The index of the cuda device being used by the CEED model.
+        epochs : int
+            The number of epochs to train the CEED model.
+        lr : float
+            The learning rate used for the optimizer.
+        batch_size : int
+            The number of samples per batch to contrastively train CEED (higher bs can improve performance but requires more GPU memory).
+        optimizer : str
+            'adam' or 'sgd' optimizer to use for training.
+        cell_type : bool
+            Whether to normalize data for use in training a CEED cell type classification model.
+        save_metrics : bool
+            Whether to run CEED on a test/val set after every epoch and chart performance. 
+        use_chan_pos : bool
+            Whether to use channel location data (x, y on probe) to train CEED. 
+        """
+
+        checkpoint_dir = os.path.join(ckpt_dir, exp_name, 'test')
+        log_dir = os.path.join(log_dir, exp_name, 'test')
         
         os.makedirs(checkpoint_dir, exist_ok=True)
         os.makedirs(log_dir, exist_ok=True)
@@ -68,14 +117,12 @@ class CEED(object):
 
         dataset = ContrastiveLearningDataset(data_dir, self.out_dim, multi_chan=self.multi_chan)
 
-        dataset_name = 'wf_multichan' if self.multi_chan else 'wf'
-
-        train_dataset = dataset.get_dataset(dataset_name, 2, 1.0, self.num_extra_chans, normalize=cell_type, detected_spikes=False)
+        train_dataset = dataset.get_dataset('wfs', 2, 1.0, self.num_extra_chans, normalize=cell_type, detected_spikes=False)
         train_loader = torch.utils.data.DataLoader(
             train_dataset, batch_size=batch_size, shuffle=True,
             num_workers=8, pin_memory=True, drop_last=True)
         
-        if plot_metrics:
+        if save_metrics:
             if self.multi_chan:
                 memory_dataset = WFDataset_lab(data_dir, split='train', multi_chan=self.multi_chan, transform=Crop(prob=0.0, num_extra_chans=self.num_extra_chans, ignore_chan_num=True), use_chan_pos=use_chan_pos)
                 memory_loader = torch.utils.data.DataLoader(
@@ -130,8 +177,9 @@ class CEED(object):
                                fp16=True, epochs=epochs, add_train=True, 
                                use_chan_pos=use_chan_pos, use_gpt=self.ddp,
                                online_head=False, eval_knn_every_n_epochs=1,
-                               no_knn=plot_metrics, checkpoint_dir=checkpoint_dir, 
-                               num_extra_chans=self.num_extra_chans)
+                               no_knn=save_metrics, checkpoint_dir=checkpoint_dir, 
+                               num_extra_chans=self.num_extra_chans, 
+                               disable_cuda=False, temperature=0.07, arch=self.arch)
         
         print("starting training...")
     
@@ -140,8 +188,15 @@ class CEED(object):
         simclr.train(train_loader, memory_loader, test_loader)
 
 
-    def load(self, ckpt_dir, exp):
-        checkpoint_dir = os.path.join(ckpt_dir, exp)
+    def load(self, ckpt_dir):
+        """ Loads CEED from a checkpoint
+        
+        Parameters
+        ----------
+        ckpt_dir : str
+            The absolute path location from which ckpt will be restored. 
+        """
+        checkpoint_dir = os.path.join(ckpt_dir, 'test')
         print("loading from previous checkpoint: ", checkpoint_dir)
         ckpt = torch.load(os.path.join(checkpoint_dir, "checkpoint.pth"),
                         map_location='cpu')
@@ -149,6 +204,15 @@ class CEED(object):
     
 
     def transform(self, data_dir, use_chan_pos):
+        """ Loads CEED from a checkpoint
+        
+        Parameters
+        ----------
+        data_dir : str
+            The absolute path location from which neural ephys data will be loaded into CEED to obtain representations.
+        use_chan_pos: bool
+            Whether channel locations (x, y on the probe) will be used to obtain representations (only if CEED model was trained using channel locations).
+        """
         if self.multi_chan:
             dataset = WFDataset_lab(data_dir, split='train', multi_chan=self.multi_chan, transform=Crop(prob=0.0, num_extra_chans=self.num_extra_chans, ignore_chan_num=True), use_chan_pos=use_chan_pos)
             loader = torch.utils.data.DataLoader(
