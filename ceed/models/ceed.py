@@ -16,6 +16,7 @@ from ceed.models.model_simclr import ModelSimCLR, Projector, Projector2
 from utils.utils import get_torch_reps
 from ceed.simclr import SimCLR
 from ceed.models.model_GPT import GPTConfig, Single_GPT
+from analysis.encoder_utils import load_GPT_backbone
 from torch.nn.parallel import DistributedDataParallel as DDP
 
 class CEED(object):
@@ -198,9 +199,11 @@ class CEED(object):
         """
         checkpoint_dir = os.path.join(ckpt_dir, 'test')
         print("loading from previous checkpoint: ", checkpoint_dir)
-        ckpt = torch.load(os.path.join(checkpoint_dir, "checkpoint.pth"),
-                        map_location='cpu')
-        self.model.load_state_dict(ckpt['state_dict'])
+        ckpt = os.path.join(checkpoint_dir, "checkpoint.pth")
+        if self.ddp:
+            load_GPT_backbone(self.model, ckpt, self.multi_chan)
+        else:
+            self.model.backbone.load(ckpt)
     
 
     def transform(self, data_dir, use_chan_pos):
