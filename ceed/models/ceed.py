@@ -217,17 +217,17 @@ class CEED(object):
             Whether channel locations (x, y on the probe) will be used to obtain representations (only if CEED model was trained using channel locations).
         """
         if self.multi_chan:
-            dataset = WFDataset_lab(data_dir, split='train', multi_chan=self.multi_chan, transform=Crop(prob=0.0, num_extra_chans=self.num_extra_chans, ignore_chan_num=True), use_chan_pos=use_chan_pos)
+            dataset = WFDataset_lab(data_dir, split='test', multi_chan=self.multi_chan, transform=Crop(prob=0.0, num_extra_chans=self.num_extra_chans, ignore_chan_num=True), use_chan_pos=use_chan_pos)
             loader = torch.utils.data.DataLoader(
                 dataset, batch_size=128, shuffle=False,
                 num_workers=8, pin_memory=True, drop_last=False)
         else:
-            dataset = WFDataset_lab(data_dir, split='train', multi_chan=False)
+            dataset = WFDataset_lab(data_dir, split='test', multi_chan=False)
             loader = torch.utils.data.DataLoader(
                 dataset, batch_size=128, shuffle=False,
                 num_workers=8, pin_memory=True, drop_last=False)
             
-        args = SimpleNamespace(ddp=False, rank=0, 
+        args = SimpleNamespace(ddp=False, rank=0,
                 multi_chan=self.multi_chan, use_chan_pos=use_chan_pos, 
                 use_gpt=self.ddp, num_extra_chans=self.num_extra_chans)
         
