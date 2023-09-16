@@ -68,7 +68,8 @@ def load_ckpt_to_model(model, ckpt_path, multi_chan):
         state_dict = {k.replace('module.', ''): v for k, v in ckpt['model'].items()}
         m, uek = model.load_state_dict(state_dict, strict=False)
     else:
-        state_dict = {'backbone.'+k: v for k,v in ckpt['state_dict'].items() if 'projector' not in k}
+        # state_dict = {'backbone.'+k: v for k,v in ckpt['state_dict'].items() if 'projector' not in k}
+        state_dict = {k: v for k,v in ckpt['state_dict'].items() if 'projector' not in k}
         state_dict.update({k: v for k,v in ckpt['state_dict'].items() if 'projector' in k})
         m, uek = model.load_state_dict(state_dict, strict=False)
     print("missing keys", m)
