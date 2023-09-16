@@ -54,7 +54,7 @@ class CEED(object):
         self.arch = model_arch
 
         if self.arch == "gpt":
-            model_args = dict(n_layer=20, n_head=4, n_embd=32, block_size=1024,
+            model_args = dict(n_layer=20, n_head=4, n_embd=64, block_size=121*out_dim,
                     bias=True, vocab_size=50304, dropout=0.0, out_dim=out_dim, is_causal=True, 
                     proj_dim=proj_dim, pos='seq_11times', multi_chan=self.multi_chan) 
             gptconf = GPTConfig(**model_args)
@@ -210,7 +210,7 @@ class CEED(object):
             self.model.backbone.load(ckpt)
     
 
-    def transform(self, data_dir, use_chan_pos):
+    def transform(self, data_dir, use_chan_pos=False):
         """ Loads CEED from a checkpoint
         
         Parameters
