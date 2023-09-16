@@ -14,8 +14,9 @@ from data_aug.contrastive_learning_dataset import ContrastiveLearningDataset, WF
 from data_aug.wf_data_augs import Crop
 from ceed.models.model_simclr import ModelSimCLR, Projector, Projector2
 from utils.utils import get_torch_reps
+from utils.load_models import load_ckpt_to_model
 from ceed.simclr import SimCLR
-from ceed.models.model_GPT import GPTConfig, Single_GPT
+from ceed.models.model_GPT import GPTConfig, Single_GPT, Multi_GPT
 from analysis.encoder_utils import load_GPT_backbone
 from torch.nn.parallel import DistributedDataParallel as DDP
 
@@ -57,7 +58,10 @@ class CEED(object):
                     bias=True, vocab_size=50304, dropout=0.0, out_dim=out_dim, is_causal=True, 
                     proj_dim=proj_dim, pos='seq_11times', multi_chan=self.multi_chan) 
             gptconf = GPTConfig(**model_args)
-            self.model = Single_GPT(gptconf).cuda(gpu)
+            if self.multi_chan:
+                self.model = Multi_GPT(gptconf).cuda(gpu)
+            else:
+                self.model = Single_GPT(gptconf).cuda(gpu)
         else:
             self.model = ModelSimCLR(base_model=self.arch, out_dim=out_dim, proj_dim=proj_dim, 
                 fc_depth=2, expand_dim=False, multichan=self.multi_chan, input_size=(2*num_extra_chans+1)*121).cuda(gpu)
@@ -202,7 +206,7 @@ class CEED(object):
         print("loading from previous checkpoint: ", checkpoint_dir)
         ckpt = os.path.join(checkpoint_dir, "checkpoint.pth")
         if self.ddp:
-            load_GPT_backbone(self.model, ckpt, self.multi_chan)
+            load_ckpt_to_model(self.model, ckpt, self.multi_chan)
         else:
             self.model.backbone.load(ckpt)
     

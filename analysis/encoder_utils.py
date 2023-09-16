@@ -2,6 +2,9 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader
 import numpy as np
+from ceed.models.model_simclr import Encoder, Encoder2, FullyConnectedEnc, AttentionEnc, MultiChanAttentionEnc1
+from analysis.projections import pca_train, pca
+from analysis.plotting import plot_contr_v_pca
 
 def load_GPT_backbone(backbone, checkpoint, is_multi_chan):
     if not is_multi_chan:

@@ -39,6 +39,16 @@ def get_flattened_data(dataset, denoise=False, denoise_path=''):
 
     return wfs_full, labels_full
 
+def compute_reps_test(model, test_wfs):
+    og_reps = []
+    model = model.double()
+    for i, og_temp in enumerate(test_wfs):
+        with torch.no_grad():
+            og_rep = model(torch.from_numpy(og_temp.reshape(1, -1)).double())
+        og_reps.append(og_rep.numpy())
+    
+    return np.squeeze(np.array(og_reps))
+
 # og_pca, og_pca_var = pca(max_chan_hptp_temps, 2)
 # tform_pca, tform_var = pca(tform_temps_numpy, 2)
 # og_reps_pca, og_reps_var = pca(og_reps, 2)

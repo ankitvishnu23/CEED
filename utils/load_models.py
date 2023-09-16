@@ -62,6 +62,19 @@ def load_ckpt(ckpt_path, multi_chan=False, rep_dim=5, proj_dim=5, pos_enc='conse
     
     return model
 
+def load_ckpt_to_model(model, ckpt_path, multi_chan):
+    ckpt = torch.load(ckpt_path, map_location=torch.device('cpu'))
+    if multi_chan:
+        state_dict = {k.replace('module.', ''): v for k, v in ckpt['model'].items()}
+        m, uek = model.load_state_dict(state_dict, strict=False)
+    else:
+        state_dict = {'backbone.'+k: v for k,v in ckpt['state_dict'].items() if 'projector' not in k}
+        state_dict.update({k: v for k,v in ckpt['state_dict'].items() if 'projector' in k})
+        m, uek = model.load_state_dict(state_dict, strict=False)
+    print("missing keys", m)
+    print("unexpected keys", uek)
+    # assert that unexpected keys should only contain the string 'projector'
+
 def get_dataloader(data_path, multi_chan=False, split='train', use_chan_pos=False):
     if multi_chan:
         dataset = WFDataset_lab(data_path, split=split, multi_chan=True, use_chan_pos=use_chan_pos,transform=Crop(prob=0.0, num_extra_chans=5, ignore_chan_num=True))
