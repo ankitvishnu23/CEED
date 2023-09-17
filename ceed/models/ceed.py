@@ -219,6 +219,8 @@ class CEED(object):
             The absolute path location from which neural ephys data will be loaded into CEED to obtain representations.
         use_chan_pos: bool
             Whether channel locations (x, y on the probe) will be used to obtain representations (only if CEED model was trained using channel locations).
+        file_split: str
+            Which data split to transform - 'test', 'val', or 'train'. Will look for corresponding spikes file. 
         """
         if self.multi_chan:
             dataset = WFDataset_lab(data_dir, split=file_split, multi_chan=self.multi_chan, transform=Crop(prob=0.0, num_extra_chans=self.num_extra_chans, ignore_chan_num=True), use_chan_pos=use_chan_pos)
