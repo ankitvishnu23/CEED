@@ -13,7 +13,7 @@ Your machine has at least one GPU.
 
 First create a Conda environment in which this package and its dependencies will be installed.
 ```console
-conda create --name <YOUR_ENVIRONMENT_NAME> python=3.8
+conda create --name <YOUR_ENVIRONMENT_NAME> python=3.9
 ```
 
 and activate it:
@@ -31,5 +31,10 @@ Then move into the newly-created repository folder, and install dependencies:
 ```console
 cd CEED
 pip install -r requirements.txt
-```
 
+
+Once this is done, you will need to finish setting up the dartsort package, which is used for data generation procedures:
+```console
+cd dartsort
+pip install -r requirements.txt
+```
