@@ -168,6 +168,30 @@ def get_torch_reps(net, data_loader, device, args):
     return feature_bank, feature_labels
 
 
+def get_torch_reps_nolabels(net, data_loader, device, args):
+    feature_bank = []
+    with torch.no_grad():
+        # generate feature bank
+        for data in data_loader:
+            if args.use_gpt:
+                data = data.view(-1, (args.num_extra_chans*2+1)*121) if args.multi_chan else torch.squeeze(data, dim=1)
+                feature = net(data.to(device=device, non_blocking=True).unsqueeze(dim=-1))
+            else:
+                feature = net(data.to(device=device, non_blocking=True))
+                feature = torch.squeeze(feature)
+            feature = F.normalize(feature, dim=1)
+            feature_bank.append(feature)
+        # [D, N]
+        feature_bank = torch.cat(feature_bank, dim=0).cpu().numpy()
+    
+    return feature_bank
+
+
+def apply_transform(transform, data):
+    transformed_data = np.array([transform(d) for d in data])
+    return transformed_data
+
+
 # knn monitor as in InstDisc https://arxiv.org/abs/1805.01978
 # implementation follows http://github.com/zhirongw/lemniscate.pytorch and https://github.com/leftthomas/SimCLR
 def knn_predict(feature, feature_bank, feature_labels, classes, knn_k, knn_t):

@@ -1,10 +1,5 @@
-import argparse
 import numpy as np
 import os 
-import sys
-import subprocess
-import random
-
 import torch
 import torch.backends.cudnn as cudnn
 
@@ -12,8 +7,8 @@ from types import SimpleNamespace
 from torchvision import models
 from data_aug.contrastive_learning_dataset import ContrastiveLearningDataset, WFDataset_lab
 from data_aug.wf_data_augs import Crop
-from ceed.models.model_simclr import ModelSimCLR, Projector, Projector2
-from utils.utils import get_torch_reps
+from ceed.models.model_simclr import ModelSimCLR
+from utils.utils import get_torch_reps, get_torch_reps_nolabels, apply_transform
 from utils.load_models import load_ckpt_to_model
 from ceed.simclr import SimCLR
 from ceed.models.model_GPT import GPTConfig, Single_GPT, Multi_GPT
@@ -210,8 +205,8 @@ class CEED(object):
             self.model.backbone.load(ckpt)
     
 
-    def transform(self, data_dir, use_chan_pos=False, file_split='test'):
-        """ Loads CEED from a checkpoint
+    def load_and_transform(self, data_dir, use_chan_pos=False, file_split='test'):
+        """ Load a spike dataset from a folder and transform the data
         
         Parameters
         ----------
@@ -240,3 +235,28 @@ class CEED(object):
         reps_test, labels_test = get_torch_reps(self.model, loader, 0, args)
 
         return reps_test, labels_test
+    
+
+    def transform(self, data):
+        """ Transform data using CEED model
+        
+        Parameters
+        ----------
+        data: numpy.ndarray
+            A collection of spike data formatted as such (N, spike_length_samples)
+        """
+        if self.multi_chan:
+            crop_tform = Crop(prob=0.0, num_extra_chans=self.num_extra_chans, ignore_chan_num=True)
+            data = apply_transform(transform=crop_tform, data=data)
+            
+        loader = torch.utils.data.DataLoader(
+            data, batch_size=128, shuffle=False,
+            num_workers=8, pin_memory=True, drop_last=False)
+            
+        args = SimpleNamespace(ddp=False, rank=0,
+                multi_chan=self.multi_chan, use_chan_pos=False, 
+                use_gpt=self.ddp, num_extra_chans=self.num_extra_chans)
+        
+        reps_test = get_torch_reps_nolabels(self.model, loader, 0, args)
+
+        return reps_test

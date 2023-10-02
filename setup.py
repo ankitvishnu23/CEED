@@ -5,13 +5,17 @@ version = None
 
 install_requires = [
     "black",
+    "brainbox",
     "colorcet",
-    "classy_vision",
-    # "dartsort",
+    "classy_vision==0.7.0",
+    "dartsort @ git+https://github.com/cwindolf/dartsort.git",
     "hdbscan",
+    "ibllib",
     "imgaug",
+    "ipykernel",
     "matplotlib",
     "MEArec",
+    "ONE-api",
     "opencv-python",
     "pandas",
     "pillow",
@@ -22,9 +26,8 @@ install_requires = [
     "tensorboard",
     "tensorflow",
     "torchtyping",
-    "torchvision",
     "typeguard",
-    "umap-learn",
+    "umap-learn"
 ]
 
 
