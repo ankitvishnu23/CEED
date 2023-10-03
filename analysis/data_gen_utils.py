@@ -681,12 +681,12 @@ def chunk_data(spike_index, max_proc_len=25000):
     -------
     chunks: numpy.ndarray
     """   
-    spike_idx_len = len(spike_index)
+    spike_idx_len = spike_index.shape[1]
     n_chunks = spike_idx_len // max_proc_len + 1
     chunks = []
     for i in range(n_chunks):
         start = i * max_proc_len
-        chunk = spike_index[start:start+max_proc_len]
+        chunk = spike_index[:, start:start+max_proc_len]
         chunks.append(chunk)
     
     return chunks
@@ -722,201 +722,9 @@ def combine_datasets(first_folder, second_folder, save_folder):
             np.save(os.path.join(save_folder, file+split), new_data)
 
 
-def make_dataset(bin_path, spike_index, geom, save_path, geom_dims=(1,2), we=None, templates=None,
-                 num_chans_extract=21, channel_index=None, unit_ids=None, train_num=1200, val_num=100,
-                 test_num=200, trough_offset=42, spike_length_samples=121, do_split=True, plot=False, random_seed=0):
-    """Extract and format data from a simulated session.
-    Parameters
-    ----------
-    bin_path: str
-        file path to the channel recording
-    spike_index: numpy.ndarray
-        spike index of shape (2, len(spike_train)) or (3, len(spike_train)) that contains the spike train, max amplitude channel
-        of each spike in the spike train(, and the putative kilosort neural unit from which each spike originates)
-    geom: numpy.ndarray
-        the probe geometry for the recording.
-    geom_dims: tuple
-        which dims to use from the probe geometry
-    we: (Optional) SpikeInterface waveform extractor object
-        Waveform extractor necessarily used in the case of simulated data
-    wfs_per_unit: int
-        number of waveforms to extract per unit
-    trough_offset: int
-        which sample to place the trough of a waveform when extracting from the recording
-    spike_length_samples: int
-        number of samples for each waveform
-    random_seed: int
-        random seed for waveform extraction
-    Returns
-    -------
-    spike_index: numpy.ndarray
-        spike index of shape (2, len(spike_train)) or (3, len(spike_train)) that contains the spike train, max amplitude channel
-        of each spike in the spike train(, and the putative kilosort neural unit from which each spike originates)
-    geom: numpy.ndarray
-    """   
-        
-    np.random.seed(random_seed)
-    num_waveforms = train_num + val_num + test_num
-    spikes_array = []
-    geom_locs_array = []
-    max_chan_array = []
-    max_proc_len = 25000
-    num_template_amps_shift = 4
-    num_chans = math.floor(num_chans_extract/2)
-    tot_num_chans = geom.shape[0]
-    if we is not None:
-        depth_order = np.argsort(geom[:,geom_dims[1]])
-        geom = geom[depth_order]
-    num_waveforms = train_num + val_num + test_num
-
-    SMALL_SIZE = 14
-    MEDIUM_SIZE = 18
-    BIGGER_SIZE = 22
-    plt.rc('axes', titlesize=MEDIUM_SIZE)     # fontsize of the axes title
-    plt.rc('axes', labelsize=SMALL_SIZE)    # fontsize of the x and y labels
-    plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
-
-    if plot:
-        if unit_ids is not None:
-            fig = plt.figure(figsize=(12 + int(num_chans_extract*0.5), 24))
-            gs = GridSpec(len(unit_ids), num_chans_extract+1, figure=fig)
-            x = np.arange(spike_length_samples)
-        else:
-            print("no unit ids, skipping plotting...")
-    
-    if unit_ids is None:
-        print("chunking data")
-        data_chunks = chunk_data(spike_index, max_proc_len)
-        for i in range(len(data_chunks)):
-            curr_chunk = data_chunks[i]
-            if i == 0:
-                print("reading waveforms")
-            waveforms, _ = read_waveforms(curr_chunk, bin_path, 
-                                      n_channels=geom.shape[0], spike_length_samples=121)
-            mcs = curr_chunk[:, 1]
-            if i == 0:
-                print("cropping and storing waveforms")
-            for i, waveform in enumerate(waveforms):
-                mc_curr = mcs[i]
-                mc_start = max(mc_curr - num_chans, 0)
-                mc_end = min(mc_curr + num_chans, tot_num_chans) + 1
-                crop_wf, crop_chan, crop_geom, mask = pad_channels(waveform.T[mc_start:mc_end], 
-                                                                   geom[mc_start:mc_end, 1:], mc_start, mc_end, 
-                                                                   num_chans_extract)
-                spikes_array.append(crop_wf)
-                geom_locs_array.append(crop_geom)
-                max_chan_array.append(crop_chan)
-        # max_chan_array = mcs
-    else:
-        for k, unit_id in tqdm(enumerate(unit_ids), desc="Unit IDs"):
-            curr_temp_wfs = []
-            curr_geom_locs = []
-            curr_spike_max_chan = []
-            
-            if len(spike_index[:,0][np.where(spike_index[:,1]==unit_id)[0]]) < num_waveforms:
-                continue
-            if we is not None:
-                waveforms = we.get_waveforms("#{}".format(str(unit_id)))
-                waveforms = waveforms[:num_waveforms, :, depth_order]
-                templates = we.get_all_templates()
-                templates = templates[:, :, depth_order]
-            else:
-                spike_frames_template = np.random.choice(spike_index[:,0][np.where(spike_index[:,2] == i)[0]], 
-                                                         size=num_waveforms)
-                waveforms, _ = read_waveforms(spike_frames_template, bin_path, channel_index=channel_index,
-                                              n_channels=geom.shape[0], spike_length_samples=spike_length_samples)
-            mc = np.unique(spike_index[:, 2][np.where(spike_index[:,1] == unit_id)[0]])[0]
-            mcs_template = templates[unit_id].ptp(0).argsort()[::-1][:num_template_amps_shift]
-            shifts = np.abs(waveforms[:,:,mcs_template]).max(1).argmax(1)
-            mcs_shifted = mcs_template[shifts]
-            for i, waveform in enumerate(waveforms):
-                mc_curr = mcs_shifted[i]
-                mc_start = max(mc_curr - num_chans, 0)
-                mc_end = min(mc_curr + num_chans + 1, tot_num_chans)
-                crop_wf, crop_chan, crop_geom, mask = pad_channels(waveform.T[mc_start:mc_end],
-                                                                   geom[mc_start:mc_end, geom_dims], mc_start, 
-                                                                   mc_end, num_chans_extract)
-                curr_temp_wfs.append(crop_wf)
-                curr_geom_locs.append(crop_geom)
-                curr_spike_max_chan.append(crop_chan)
-
-            curr_temp_wfs = np.asarray(curr_temp_wfs)
-            curr_geom_locs = np.asarray(curr_geom_locs)
-
-            spikes_array.append(curr_temp_wfs)
-            geom_locs_array.append(curr_geom_locs)
-            max_chan_array.append(curr_spike_max_chan)
-
-            if plot:
-                ax0 = fig.add_subplot(gs[k, 0])
-                ax0.title.set_text('Unit {}'.format(str(unit_id)))
-                ax0.plot(x, templates[unit_id, :, mc])
-                ax0.axes.get_xaxis().set_visible(False)
-                ax1 = fig.add_subplot(gs[k, 1:], sharey=ax0)
-                for waveform in curr_temp_wfs[:100]:
-                    ax1.plot(waveform.flatten(), color='blue', alpha=.1)
-                    ax1.plot(templates[unit_id].T[mc_start:mc_end].flatten(), color='red')
-                    ax1.axes.get_yaxis().set_visible(False)
-                    ax1.axes.get_xaxis().set_visible(False)
-        
-        labels_train = np.array([[i for j in range(train_num)] for i in range(len(unit_ids))]).flatten()
-        labels_val = np.array([[i for j in range(val_num)] for i in range(len(unit_ids))]).flatten()
-        labels_test = np.array([[i for j in range(test_num)] for i in range(len(unit_ids))]).flatten()
-
-        np.save(os.path.join(save_path, 'labels_train.npy'), labels_train)
-        np.save(os.path.join(save_path, 'labels_val.npy'), labels_val)
-        np.save(os.path.join(save_path, 'labels_test.npy'), labels_test)
-        fig.subplots_adjust(wspace=0, hspace=0.25)
-    
-    spikes_array = np.array(spikes_array)
-    geom_locs_array = np.array(geom_locs_array)
-    max_chan_array = np.array(max_chan_array)
-    np.save(os.path.join(save_path, 'full_raw_spikes.npy'), spikes_array)
-    np.save(os.path.join(save_path, 'channel_spike_locs.npy'), geom_locs_array)
-    
-    print("making train, val, test splits")
-    if do_split:
-        train_set, val_set, test_set = split_data(spikes_array, train_num, val_num, test_num, 
-                                                  num_chans_extract, last_dim=spike_length_samples)
-        train_geom_locs, val_geom_locs, test_geom_locs = split_data(geom_locs_array, train_num, val_num, 
-                                                                    test_num, num_chans_extract,
-                                                                    last_dim=geom.shape[1])
-        train_max_chan, val_max_chan, test_max_chan = split_data(max_chan_array, train_num, val_num, 
-                                                                 test_num, num_chans_extract, last_dim=0)
-        print("saving split results")
-        np.save(os.path.join(save_path, 'spikes_train.npy'), train_set)
-        np.save(os.path.join(save_path, 'spikes_val.npy'), val_set)
-        np.save(os.path.join(save_path, 'spikes_test.npy'), test_set)
-
-        np.save(os.path.join(save_path, 'channel_spike_locs_train.npy'), train_geom_locs)
-        np.save(os.path.join(save_path, 'channel_spike_locs_val.npy'), val_geom_locs)
-        np.save(os.path.join(save_path, 'channel_spike_locs_test.npy'), test_geom_locs)
-
-        np.save(os.path.join(save_path, 'channel_num_train.npy'), train_max_chan)
-        np.save(os.path.join(save_path, 'channel_num_val.npy'), val_max_chan)
-        np.save(os.path.join(save_path, 'channel_num_test.npy'), test_max_chan)
-        
-        np.save(os.path.join(save_path, 'geom.npy'), geom)
-        
-        return train_set, val_set, test_set, train_geom_locs, val_geom_locs, test_geom_locs, train_max_chan, val_max_chan, test_max_chan
-        
-    else:
-        #save out full dataset with no splits (useful for inference)
-        print("saving no split results")
-        np.save(os.path.join(save_path, 'spikes_test.npy'), spikes_array)
-        np.save(os.path.join(save_path, 'channel_spike_locs_test.npy'), geom_locs_array)
-        np.save(os.path.join(save_path, 'channel_num_test.npy'), max_chan_array)
-    
-        np.save(os.path.join(save_path, 'geom.npy'), geom)
-        
-        return spikes_array, geom_locs_array, max_chan_array
-    
-
-
-
 def make_dataset(bin_path, spike_index, geom, save_path, we=None, 
                  templates=None, chan_index=None, num_chans_extract=21, unit_ids=None, 
-                 save_covs=False, train_num=1200, val_num=0, test_num=200, plot=False, normalize=False,
+                 save_covs=False, train_num=1200, val_num=0, test_num=200, plot=False, inference=False, normalize=False,
                  shift=False, save_fewer=False, do_data_split=True, random_seed=0):
     """Extract and format data from a simulated session.
     Parameters
@@ -948,6 +756,8 @@ def make_dataset(bin_path, spike_index, geom, save_path, we=None,
         number of waveforms to put in test set (or (min, max) number of waveforms allowed per unit)
     plot: bool
         save out plot of spikes per unit in a plot folder 
+    inference: bool
+        flag to only save out test sets of spikes for inference, rather than train/val sets as well for training new models
     normalize: bool
         flag to normalize spikes into range [-1, 1], especially useful for celltype tasks/training
     shift: bool
@@ -1000,11 +810,13 @@ def make_dataset(bin_path, spike_index, geom, save_path, we=None,
     
     if unit_ids is None:
         data_chunks = chunk_data(spike_index, max_proc_len)
+        if spike_index.shape[0] == 3:
+            chosen_units = np.unique(spike_index[2, :])
         for i in range(len(data_chunks)):
             curr_chunk = data_chunks[i]
-            waveforms, _ = read_waveforms(curr_chunk[:, 0], bin_path, 
+            waveforms, _ = read_waveforms(curr_chunk[0, :], bin_path, 
                                       n_channels=geom.shape[0], spike_length_samples=spike_length_to_extract)
-            mcs = curr_chunk[:, 1]
+            mcs = curr_chunk[1, :]
             for i, waveform in enumerate(waveforms):
                 mc_curr = mcs[i]
                 mc_start = max(mc_curr - num_chans, 0)
@@ -1124,56 +936,68 @@ def make_dataset(bin_path, spike_index, geom, save_path, we=None,
         max_chan_array = np.array(max_chan_array).reshape(max_chan_array.shape[0] * max_chan_array.shape[1], max_chan_array.shape[2])
         masks_array = np.array(masks_array).reshape(masks_array.shape[0] * masks_array.shape[1], masks_array.shape[2])
     
-    if do_data_split and not save_fewer:
-        print("making train, val, test splits")
-        train_set, val_set, test_set = split_data(spikes_array, train_num, val_num, test_num, 
-                                                  num_chans_extract, last_dim=spike_length_samples)
-        train_geom_locs, val_geom_locs, test_geom_locs = split_data(geom_locs_array, train_num, val_num, 
-                                                                    test_num, num_chans_extract,
-                                                                    last_dim=geom.shape[1])
-        train_max_chan, val_max_chan, test_max_chan = split_data(max_chan_array, train_num, val_num, 
-                                                                 test_num, num_chans_extract, last_dim=0)
-        print("saving split results")
-        np.save(os.path.join(save_path, 'spikes_train.npy'), train_set)
-        np.save(os.path.join(save_path, 'spikes_val.npy'), val_set)
-        np.save(os.path.join(save_path, 'spikes_test.npy'), test_set)
+    if not inference:
+        if do_data_split and not save_fewer:
+            print("making train, val, test splits")
+            train_set, val_set, test_set = split_data(spikes_array, train_num, val_num, test_num, 
+                                                    num_chans_extract, last_dim=spike_length_samples)
+            train_geom_locs, val_geom_locs, test_geom_locs = split_data(geom_locs_array, train_num, val_num, 
+                                                                        test_num, num_chans_extract,
+                                                                        last_dim=geom.shape[1])
+            train_max_chan, val_max_chan, test_max_chan = split_data(max_chan_array, train_num, val_num, 
+                                                                    test_num, num_chans_extract, last_dim=0)
+            print("saving split results")
+            np.save(os.path.join(save_path, 'spikes_train.npy'), train_set)
+            np.save(os.path.join(save_path, 'spikes_val.npy'), val_set)
+            np.save(os.path.join(save_path, 'spikes_test.npy'), test_set)
 
-        np.save(os.path.join(save_path, 'channel_spike_locs_train.npy'), train_geom_locs)
-        np.save(os.path.join(save_path, 'channel_spike_locs_val.npy'), val_geom_locs)
-        np.save(os.path.join(save_path, 'channel_spike_locs_test.npy'), test_geom_locs)
+            np.save(os.path.join(save_path, 'channel_spike_locs_train.npy'), train_geom_locs)
+            np.save(os.path.join(save_path, 'channel_spike_locs_val.npy'), val_geom_locs)
+            np.save(os.path.join(save_path, 'channel_spike_locs_test.npy'), test_geom_locs)
 
-        np.save(os.path.join(save_path, 'channel_num_train.npy'), train_max_chan)
-        np.save(os.path.join(save_path, 'channel_num_val.npy'), val_max_chan)
-        np.save(os.path.join(save_path, 'channel_num_test.npy'), test_max_chan)
+            np.save(os.path.join(save_path, 'channel_num_train.npy'), train_max_chan)
+            np.save(os.path.join(save_path, 'channel_num_val.npy'), val_max_chan)
+            np.save(os.path.join(save_path, 'channel_num_test.npy'), test_max_chan)
+            
+            np.save(os.path.join(save_path, 'geom.npy'), geom)
+            np.save(os.path.join(save_path, 'selected_units.npy'), np.array(chosen_units))
+            
+            return train_set, test_set, train_geom_locs, test_geom_locs, train_max_chan, test_max_chan
+            
+        else:
+            # save out all spikes (even for neurons that didn't have enough to extract) into train and test sets.
+            print("saving no split train dataset")
+            test_set = np.array([curr_arr[:train_num] for curr_arr in spikes_array]).reshape(-1, num_chans_extract, spike_length_samples)
+            train_set = np.concatenate([curr_arr[train_num:] for curr_arr in spikes_array])
+            test_locs = np.array([curr_arr[:train_num] for curr_arr in geom_locs_array]).reshape(-1, num_chans_extract, 2)
+            train_locs = np.concatenate([curr_arr[train_num:] for curr_arr in geom_locs_array])
+            test_chans = np.array([curr_arr[:train_num] for curr_arr in max_chan_array]).reshape(-1, num_chans_extract)
+            train_chans = np.concatenate([curr_arr[train_num:] for curr_arr in max_chan_array])
+            test_labs = np.array([curr_arr[:train_num] for curr_arr in labels_overall]).flatten()
+            train_labs = np.concatenate([curr_arr[train_num:] for curr_arr in labels_overall]).flatten()
+            
+            np.save(os.path.join(save_path, 'spikes_test.npy'), test_set)
+            np.save(os.path.join(save_path, 'spikes_train.npy'), train_set)
+            np.save(os.path.join(save_path, 'channel_spike_locs_test.npy'), test_locs)
+            np.save(os.path.join(save_path, 'channel_spike_locs_train.npy'), train_locs)
+            np.save(os.path.join(save_path, 'channel_num_test.npy'), test_chans)
+            np.save(os.path.join(save_path, 'channel_num_train.npy'), train_chans)
+            np.save(os.path.join(save_path, 'labels_test.npy'), test_labs)
+            np.save(os.path.join(save_path, 'labels_train.npy'), train_labs)
         
-        np.save(os.path.join(save_path, 'geom.npy'), geom)
-        np.save(os.path.join(save_path, 'selected_units.npy'), np.array(chosen_units))
-        
-        return train_set, test_set, train_geom_locs, test_geom_locs, train_max_chan, test_max_chan
-        
+            np.save(os.path.join(save_path, 'geom.npy'), geom)
+            np.save(os.path.join(save_path, 'selected_units.npy'), np.array(chosen_units))
+
+            return train_set, test_set, train_geom_locs, test_geom_locs, train_max_chan, test_max_chan
     else:
-        # save out full dataset with no splits (useful for inference)
-        print("saving no split train dataset")
-        test_set = np.array([curr_arr[:test_num] for curr_arr in spikes_array]).reshape(-1, num_chans_extract, spike_length_samples)
-        print(test_set.shape)
-        train_set = np.concatenate([curr_arr[test_num:] for curr_arr in spikes_array])
-        print(train_set.shape)
-        test_locs = np.array([curr_arr[:test_num] for curr_arr in geom_locs_array]).reshape(-1, num_chans_extract, 2)
-        train_locs = np.concatenate([curr_arr[test_num:] for curr_arr in geom_locs_array])
-        test_chans = np.array([curr_arr[:test_num] for curr_arr in max_chan_array]).reshape(-1, num_chans_extract)
-        train_chans = np.concatenate([curr_arr[test_num:] for curr_arr in max_chan_array])
-        test_labs = np.array([curr_arr[:test_num] for curr_arr in labels_overall]).flatten()
-        train_labs = np.concatenate([curr_arr[test_num:] for curr_arr in labels_overall]).flatten()
-        
-        np.save(os.path.join(save_path, 'spikes_test.npy'), test_set)
-        np.save(os.path.join(save_path, 'spikes_train.npy'), train_set)
-        np.save(os.path.join(save_path, 'channel_spike_locs_test.npy'), test_locs)
-        np.save(os.path.join(save_path, 'channel_spike_locs_train.npy'), train_locs)
-        np.save(os.path.join(save_path, 'channel_num_test.npy'), test_chans)
-        np.save(os.path.join(save_path, 'channel_num_train.npy'), train_chans)
-        np.save(os.path.join(save_path, 'labels_test.npy'), test_labs)
-        np.save(os.path.join(save_path, 'labels_train.npy'), train_labs)
+        #save out full dataset with no splits (useful for inference)
+        print("saving no split results")
+        np.save(os.path.join(save_path, 'spikes_test.npy'), spikes_array)
+        np.save(os.path.join(save_path, 'channel_spike_locs_test.npy'), geom_locs_array)
+        np.save(os.path.join(save_path, 'channel_num_test.npy'), max_chan_array)
     
         np.save(os.path.join(save_path, 'geom.npy'), geom)
         np.save(os.path.join(save_path, 'selected_units.npy'), np.array(chosen_units))
+
+        return test_set, test_geom_locs, test_max_chan
     
