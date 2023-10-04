@@ -10,7 +10,6 @@ install_requires = [
     "classy_vision==0.7.0",
     "dartsort @ git+https://github.com/cwindolf/dartsort.git",
     "hdbscan",
-    "PyQt5==5.15.5",
     "ibllib",
     "imgaug",
     "ipykernel",

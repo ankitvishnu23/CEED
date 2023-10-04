@@ -34,8 +34,8 @@ except ImportError:
 
 try:
     from dartsort.src.spike_psvae.subtract import read_geom_from_meta
-    from dartsort.src.spike_psvae.waveform_utils import make_channel_index, make_contiguous_channel_index
-    from dartsort.src.spike_psvae import denoise, snr_templates, spike_train_utils
+    from dartsort.src.spike_psvae.waveform_utils import make_contiguous_channel_index
+    from dartsort.src.spike_psvae import snr_templates, spike_train_utils
     from dartsort.src.spike_psvae.spikeio import read_waveforms
 except ImportError:
     print("Failed to import spike-psvae/dartsort functions")
