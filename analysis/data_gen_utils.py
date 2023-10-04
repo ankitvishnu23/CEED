@@ -22,21 +22,18 @@ try:
     import brainbox.io.one as bbone
     from brainbox.io.one import SpikeSortingLoader
     from brainbox.io.spikeglx import Streamer
-
     from ibllib.atlas import AllenAtlas
-    from ibllib.dsp import voltage
-    from ibllib.io import spikeglx
-    from ibllib.dsp import fshift, rms
-
+    from neurodsp import voltage
+    import spikeglx
     from one.api import ONE
 except ImportError:
     print("Failed to import IBL packages (brainbox, ibllib, one, brainbox")
 
 try:
-    from dartsort.src.spike_psvae.subtract import read_geom_from_meta
-    from dartsort.src.spike_psvae.waveform_utils import make_contiguous_channel_index
-    from dartsort.src.spike_psvae import snr_templates, spike_train_utils
-    from dartsort.src.spike_psvae.spikeio import read_waveforms
+    from spike_psvae.subtract import read_geom_from_meta
+    from spike_psvae.waveform_utils import make_contiguous_channel_index
+    from spike_psvae import snr_templates, spike_train_utils
+    from spike_psvae.spikeio import read_waveforms
 except ImportError:
     print("Failed to import spike-psvae/dartsort functions")
 
