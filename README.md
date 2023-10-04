@@ -38,6 +38,11 @@ followed by a command that will look similar to the following, and will show up 
 echo 'export PATH="/opt/homebrew/opt/qt@5/bin:$PATH"' >> ~/.zshrc
 ```
 
+finally, run the following command, which may take a while to complete:
+```console
+pip install pyqt5 --config-settings --confirm-license= --verbose
+```
+
 Now, move into the folder where you want to place the repository folder, and then download it from GitHub:
 ```console
 cd <SOME_FOLDER>
