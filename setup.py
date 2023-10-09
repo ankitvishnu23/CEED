@@ -8,6 +8,7 @@ install_requires = [
     "brainbox",
     "colorcet",
     "classy_vision==0.7.0",
+    "cloudpickle",
     "dartsort @ git+https://github.com/cwindolf/dartsort.git",
     "hdbscan",
     "ibllib",
