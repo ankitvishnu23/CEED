@@ -12,7 +12,6 @@ from utils.utils import get_torch_reps, get_torch_reps_nolabels, apply_transform
 from utils.load_models import load_ckpt_to_model
 from ceed.simclr import SimCLR
 from ceed.models.model_GPT import GPTConfig, Single_GPT, Multi_GPT
-from analysis.encoder_utils import load_GPT_backbone
 from torch.nn.parallel import DistributedDataParallel as DDP
 
 class CEED(object):

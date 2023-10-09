@@ -8,11 +8,6 @@ import matplotlib.gridspec as gridspec
 import matplotlib.patheffects as pe
 
 import colorcet as cc
-def get_ccolor(k):
-    if k == -1:
-        return "#808080"
-    else:
-        return ccolors[k % len(ccolors)]
 ccolors = cc.glasbey[:31]
 
 # %matplotlib inline
