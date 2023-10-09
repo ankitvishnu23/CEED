@@ -15,7 +15,7 @@ class SingleChanDenoiser(nn.Module):
         # self, n_filters=[16, 8, 4], filter_sizes=[5, 11, 21], spike_size=121
         self, n_filters=[16, 8], filter_sizes=[5, 11], spike_size=121
     ):
-        super(SingleChanDenoiser, self).__init__()
+        super().__init__()
         self.conv1 = nn.Sequential(nn.Conv1d(1, n_filters[0], filter_sizes[0]), nn.ReLU())
         self.conv2 = nn.Sequential(nn.Conv1d(n_filters[0], n_filters[1], filter_sizes[1]), nn.ReLU())
         if len(n_filters) > 2:
@@ -42,7 +42,7 @@ class Projector(nn.Module):
     Option to include batchnorm after every layer.'''
 
     def __init__(self, Lvpj=[512, 128], rep_dim=5, proj_dim=5, bnorm = False, depth = 3):
-        super(Projector, self).__init__()
+        super().__init__()
         print(f"Using projector; batchnorm {bnorm} with depth {depth}; hidden_dim={Lvpj[0]}")
         nlayer = [nn.BatchNorm1d(Lvpj[0])] if bnorm else []
         list_layers = [nn.Linear(rep_dim, Lvpj[0])] + nlayer + [nn.ReLU()]
@@ -61,7 +61,7 @@ class Projector2(nn.Module):
     Option to include batchnorm after every layer.'''
 
     def __init__(self, Lvpj=[128], rep_dim=5, proj_dim=5, bnorm = False, depth = 2):
-        super(Projector2, self).__init__()
+        super().__init__()
         print(f"Using projector; batchnorm {bnorm} with depth {depth}; hidden_dim={Lvpj[0]}")
         nlayer = [nn.BatchNorm1d(Lvpj[0])] if bnorm else []
         list_layers = [nn.Linear(rep_dim, Lvpj[0])] + nlayer + [nn.ReLU()]
@@ -77,7 +77,7 @@ class Projector2(nn.Module):
 
 class Encoder(nn.Module):
     def __init__(self, Lv=[200, 150, 100, 75], ks=[11, 21, 31], out_size = 2, proj_dim=5, fc_depth=2, input_size=121):
-        super(Encoder, self).__init__()
+        super().__init__()
         print("init Encoder")
         self.proj_dim = out_size if out_size < proj_dim else proj_dim
         self.enc_block1d = nn.Sequential(
@@ -127,7 +127,7 @@ class Encoder(nn.Module):
 
 class Encoder2(nn.Module):
     def __init__(self, Lv=[64, 128, 256, 256, 256], ks=[11], out_size = 2, proj_dim=5, fc_depth=2, input_size=121):
-        super(Encoder2, self).__init__()
+        super().__init__()
         self.proj_dim = out_size if out_size < proj_dim else proj_dim
         self.enc_block1d = nn.Sequential(
             nn.Conv1d(in_channels=1, out_channels=Lv[0], kernel_size=ks[0], padding=math.ceil((ks[0]-1)/2)),
@@ -176,8 +176,9 @@ class Encoder2(nn.Module):
 
 class FullyConnectedEnc(nn.Module):
     def __init__(self, input_size=121, Lv=[768, 512, 256], out_size=2, proj_dim=5, fc_depth=2, multichan=False):
-        super(FullyConnectedEnc, self).__init__()
-        self.proj_dim = out_size if out_size < proj_dim else proj_dim
+        super().__init__()
+     #   self.proj_dim = out_size if out_size < proj_dim else proj_dim
+        self.proj_dim = proj_dim
         self.input_size = input_size
         self.multichan = multichan
 
@@ -233,7 +234,6 @@ class Squeeze(nn.Module):
         Args:
             inp: 1-3D input tensor
 
-        Returns:
             If the third dimension of the input tensor can be squeezed,
             return the resulting 2D output tensor. If input is 2D or less,
             return the input.
@@ -278,7 +278,7 @@ class _Skip(nn.Module):
 
 class CEBRA(nn.Module):
     def __init__(self, num_units=32, out_size = 2, proj_dim=5, fc_depth=2, input_size=121, multichan=False):
-        super(CEBRA, self).__init__()
+        super().__init__()
         print("init CEBRA Encoder")
         self.proj_dim = out_size if out_size < proj_dim else proj_dim
         self.multichan = multichan
@@ -351,7 +351,7 @@ class PositionalEncoding(nn.Module):
 
 class AttentionEnc(nn.Module):
     def __init__(self, spike_size=121, n_channels=1, out_size=2, proj_dim=5, fc_depth=2, nlayers=9, nhead=8, dropout=0.1, expand_dim=16, cls_head=None):
-        super(AttentionEnc, self).__init__()
+        super().__init__()
         self.spike_size = spike_size
         self.expand_dim = expand_dim
         self.proj_dim = out_size if out_size < proj_dim else proj_dim
@@ -435,7 +435,7 @@ class AttentionEnc(nn.Module):
 
 class MultiChanAttentionEnc1(nn.Module):
     def __init__(self, spike_size=121, n_channels=11, out_size=2, proj_dim=5, fc_depth=2, nlayers=9, nhead=8, dropout=0.1, expand_dim=16, cls_head=None):
-        super(MultiChanAttentionEnc1, self).__init__()
+        super().__init__()
         self.spike_size = spike_size
         self.expand_dim = expand_dim
         self.n_channels = n_channels
@@ -555,15 +555,13 @@ model_dict = { "custom_encoder": Encoder,
 class ModelSimCLR(nn.Module):
 
     def __init__(self, base_model, out_dim, proj_dim, fc_depth=2, expand_dim=16, ckpt=None, cls_head=None, multichan=True, input_size=121):
-        super(ModelSimCLR, self).__init__()
-        
+        super().__init__()
         base_model += '_multichan' if multichan and 'attention' in base_model else ''
-
         if "attention" in base_model:
             self.backbone = model_dict[base_model](out_size=out_dim, proj_dim=proj_dim, fc_depth=fc_depth, expand_dim=expand_dim, cls_head=cls_head)
         else:
             self.backbone = model_dict[base_model](out_size=out_dim, proj_dim=proj_dim, fc_depth=fc_depth, input_size=input_size, multichan=multichan)
-
+        print(self.backbone)
         # self.backbone = self._get_basemodel(base_model)
         print("number of encoder params: ", sum(p.numel() for p in self.backbone.parameters()))
         print("number of transfomer params: ", sum(p.numel() for n,p in self.backbone.named_parameters() if 'transformer_encoder' in n))

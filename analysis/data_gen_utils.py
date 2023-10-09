@@ -24,6 +24,7 @@ try:
     from brainbox.io.spikeglx import Streamer
     from ibllib.atlas import AllenAtlas
     from neurodsp import voltage
+    from neurodsp.utils import rms
     import spikeglx
     from one.api import ONE
 except ImportError:
@@ -488,7 +489,12 @@ def download_IBL(pid, save_folder, t_window=[0, 500]):
     tsel = slice(s0, int(t_window[1] * sr.fs))
 
     # Important: remove sync channel from raw data, and transpose
-    raw = sr[tsel, :-sr.nsync].T
+    raw = sr.read(nsel=tsel).T
+    print(raw.shape)
+    #nsel=slice(0, 10000), csel=slice(None), sync=True, volts=True
+    #print(sr.target_dir)
+    
+    sr.file_bin = sr.target_dir /  '_spikeglx_ephysData_g0_t0.imec0.ap.stream.cbin'
 
     folder = Path(save_folder)
     binary = Path(sr.file_bin)
