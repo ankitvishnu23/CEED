@@ -346,7 +346,6 @@ def save_reps(model, loader, ckpt_path, split='train', multi_chan=False,rep_afte
             feature_bank.append(feature)
             
         feature_bank = torch.cat(feature_bank, dim=0)
-        print(feature_bank.shape)
         if rep_after_proj:
             torch.save(feature_bank, os.path.join(ckpt_root_dir, f'{split}_aftproj_reps{suffix}.pt'))
             print(f"saved {split} features to {ckpt_root_dir}/{split}_aftproj_reps{suffix}.pt")

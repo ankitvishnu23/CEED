@@ -260,7 +260,6 @@ class CEED(object):
         if self.multi_chan:
             crop_tform = Crop(prob=0.0, num_extra_chans=self.num_extra_chans, ignore_chan_num=True)
             data = apply_transform(transform=crop_tform, data=data)
-        print("Data type of array:", data.dtype)
         loader = torch.utils.data.DataLoader(
             data, batch_size=128, shuffle=False,
             num_workers=8, pin_memory=True, drop_last=False)
