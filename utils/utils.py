@@ -160,7 +160,7 @@ def get_torch_reps(net, data_loader, device, args):
             if len(feature.shape) > 1:
                 dim = 1
             else:
-                dim =0
+                dim = 0
             feature = F.normalize(feature, dim=dim)
             feature_bank.append(feature)
             feature_labels = torch.cat((feature_labels, target))
@@ -177,6 +177,7 @@ def get_torch_reps_nolabels(net, data_loader, device, args):
     with torch.no_grad():
         # generate feature bank
         for data in data_loader:
+            data = data.to(dtype=torch.float32)
             if args.use_gpt:
                 data = data.view(-1, (args.num_extra_chans*2+1)*121) if args.multi_chan else torch.squeeze(data, dim=1)
                 feature = net(data.to(device=device, non_blocking=True).unsqueeze(dim=-1))
