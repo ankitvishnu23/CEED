@@ -54,7 +54,7 @@ class CEED(object):
             self.device = gpu
 
         if self.arch == "gpt":
-            model_args = dict(n_layer=20, n_head=4, n_embd=64, block_size=121,
+            model_args = dict(n_layer=20, n_head=4, n_embd=64, block_size=121 * (2 * self.num_extra_chans + 1),
                     bias=True, vocab_size=50304, dropout=0.0, out_dim=out_dim, is_causal=True, 
                     proj_dim=proj_dim, pos='seq_11times', multi_chan=self.multi_chan, num_classes=self.num_classes) 
             gptconf = GPTConfig(**model_args)
