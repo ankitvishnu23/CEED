@@ -25,10 +25,11 @@ Then move into the newly-created repository folder, and install dependencies:
 ```console
 cd CEED
 pip install -r requirements.txt
+```
 
-
-Once this is done, you will need to finish setting up the dartsort package, which is used for data generation procedures:
+Once this is done, you will need to download and install the dartsort package, which is used for data generation procedures:
 ```console
+git clone https://github.com/cwindolf/dartsort.git
 cd dartsort
 pip install -r requirements.txt
 ```
@@ -61,10 +62,11 @@ Then move into the newly-created repository folder, and install dependencies:
 ```console
 cd CEED
 pip install -r requirements.txt
+```
 
-
-Once this is done, you will need to finish setting up the dartsort package, which is used for data generation procedures:
+Once this is done, you will need to download and install the dartsort package, which is used for data generation procedures:
 ```console
+git clone https://github.com/cwindolf/dartsort.git
 cd dartsort
 pip install -r requirements.txt
 ```
