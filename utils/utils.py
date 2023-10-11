@@ -161,6 +161,7 @@ def get_torch_reps(net, data_loader, device, args):
                 dim = 1
             else:
                 dim = 0
+            feature = F.normalize(feature, dim=dim)
             feature_bank.append(feature)
             feature_labels = torch.cat((feature_labels, target))
         # [D, N]
@@ -187,6 +188,7 @@ def get_torch_reps_nolabels(net, data_loader, device, args):
                 dim = 1
             else:
                 dim =0
+            feature = F.normalize(feature, dim=dim)
             feature_bank.append(feature)
         # [D, N]
         feature_bank = torch.cat(feature_bank, dim=0).cpu().numpy()
