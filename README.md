@@ -2,12 +2,8 @@
 Towards robust and generalizable representations of extracellular data using contrastive learning
 
 ## Getting Started
-This repo provides tools for training and evaluating a contrastive learning based model for extracellular 
+This repo provides tools for training, evaluating, and visualizing a contrastive learning based model for extracellular 
 electrophysiology data. 
-
-## Requirements
-
-Your machine has at least one GPU.
 
 ## Installation
 
