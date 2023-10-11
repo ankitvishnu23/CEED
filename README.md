@@ -21,15 +21,23 @@ and activate it:
 conda activate <YOUR_ENVIRONMENT_NAME>
 ```
 
+Then move into the newly-created repository folder, and install dependencies:
+```console
+cd CEED
+pip install -r requirements.txt
+
+
+Once this is done, you will need to finish setting up the dartsort package, which is used for data generation procedures:
+```console
+cd dartsort
+pip install -r requirements.txt
+```
+
 #### For macOS users only:
 To use the ibllib package, which is involved in dataset generation, Qt5 must be installed separate from pip. 
 We will use homebrew to install it (install at https://brew.sh/ if you have not already) using the following command:
 ```console
 brew install qt5
-```
-
-followed by 
-```console
 brew link qt5 --force
 ```
 
