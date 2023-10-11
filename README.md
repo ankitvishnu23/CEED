@@ -21,8 +21,9 @@ and activate it:
 conda activate <YOUR_ENVIRONMENT_NAME>
 ```
 
-Then move into the newly-created repository folder, and install dependencies:
+Download CEED from github and then install dependencies:
 ```console
+git clone https://github.com/ankitvishnu23/CEED.git
 cd CEED
 pip install -r requirements.txt
 ```
@@ -52,14 +53,9 @@ finally, run the following command, which may take a while to complete:
 pip install pyqt5 --config-settings --confirm-license= --verbose
 ```
 
-Now, move into the folder where you want to place the repository folder, and then download it from GitHub:
+Download CEED from github and then install dependencies:
 ```console
-cd <SOME_FOLDER>
 git clone https://github.com/ankitvishnu23/CEED.git
-```
-
-Then move into the newly-created repository folder, and install dependencies:
-```console
 cd CEED
 pip install -r requirements.txt
 ```
