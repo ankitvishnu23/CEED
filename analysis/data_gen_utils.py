@@ -40,11 +40,11 @@ except ImportError:
     print("Failed to import spike-psvae/dartsort functions")
 
 
-######
-#
-# Function taken from YASS: Yet Another Spike Sorter -  https://github.com/paninski-lab/yass#yass-yet-another-spike-sorter
-#
-######
+'''
+
+Functions taken from YASS: Yet Another Spike Sorter -  https://github.com/paninski-lab/yass#yass-yet-another-spike sorter
+
+'''
 def kill_signal(recordings, threshold, window_size):
     """
     Thresholds recordings, values above 'threshold' are considered signal
@@ -105,12 +105,6 @@ def kill_signal(recordings, threshold, window_size):
 
     return recordings, is_noise_idx
 
-
-######
-#
-# Function taken from YASS: Yet Another Spike Sorter -  https://github.com/paninski-lab/yass#yass-yet-another-spike-sorter
-#
-######
 def noise_whitener(recordings, temporal_size, window_size, sample_size=1000,
                    threshold=3.0, max_trials_per_sample=10000,
                    allow_smaller_sample_size=False):
@@ -170,12 +164,6 @@ def noise_whitener(recordings, temporal_size, window_size, sample_size=1000,
 
     return spatial_SIG, temporal_SIG
 
-
-######
-#
-# Function taken from YASS: Yet Another Spike Sorter -  https://github.com/paninski-lab/yass#yass-yet-another-spike-sorter
-#
-######
 def search_noise_snippets(recordings, is_noise_idx, sample_size,
                           temporal_size, channel_choices=None,
                           max_trials_per_sample=100000,
@@ -694,35 +682,45 @@ def chunk_data(spike_index, max_proc_len=25000):
     
     return chunks
 
-
-def combine_datasets(first_folder, second_folder, save_folder):
-    """Combine two CEED datasets to make a larger dataset. Can be used to train a model from multiple recordings.
+def combine_datasets(data_folder_list, save_folder):
+    """Combine multiple CEED datasets to make a larger dataset. Can be used to train a model from multiple recordings.
     Parameters
     ----------
-    first_folder: str
-        absolute path to folder containing one dataset to combine
-    second_folder: str
-        absolute path to folder containing one dataset to combine
+    data_folder_list: list
+        list of absolute path to folders containing CEED datasets to combine
     save_folder: str
         absolute path to destination folder for combined dataset.
     """   
     if not os.path.exists(save_folder):
         os.makedirs(save_folder)
     files_to_fix = ['spikes_', 'labels_', 'channel_num_', 'channel_spike_locs_']
-    ttv = ['train.npy', 'test.npy']
+    ttv = ['train.npy', 'val.npy', 'test.npy']
     
     for i, file in enumerate(files_to_fix):
         for split in ttv:
-            first_data = np.load(os.path.join(first_folder, file+split), allow_pickle=True)
-            second_data = np.load(os.path.join(second_folder, file+split), allow_pickle=True)
+            data_list = []
+            num_unique = 0
+            for data_folder in data_folder_list:
+                data = np.load(os.path.join(data_folder, file+split), allow_pickle=True)
+                if file == 'labels_':
+                    data = num_unique + data
+                    if len(np.unique(data)) > 0:
+                        num_unique += max(np.unique(data))                        
+                data_list.append(data)
             if file == 'labels_':
-                num_unique = len(np.unique(first_data))
-                second_data = num_unique + second_data
-                new_data = np.concatenate([first_data, second_data])
+                combined_data = np.concatenate(data_list)
             else:
-                assert first_data.shape[1] == second_data.shape[1], 'data should be of identical channel dim!'
-                new_data = np.vstack([first_data, second_data])
-            np.save(os.path.join(save_folder, file+split), new_data)
+                combined_data = np.vstack(data_list)
+            np.save(os.path.join(save_folder, file+split), combined_data)
+    #add spatial and temporal covariances to separate folders
+    for i, data_folder in enumerate(data_folder_list):
+        temporal_cov = np.load(os.path.join(data_folder, 'temporal_cov.npy'), allow_pickle=True)
+        spatial_cov = np.load(os.path.join(data_folder, 'temporal_cov.npy'), allow_pickle=True)
+        cov_folder = f"/covariances_ds{i}"
+        if not os.path.exists(save_folder+cov_folder):
+            os.makedirs(save_folder+cov_folder)
+        np.save(os.path.join(save_folder+cov_folder, 'temporal_cov.npy'), temporal_cov)
+        np.save(os.path.join(save_folder+cov_folder, 'spatial_cov.npy'), spatial_cov)
 
 
 def make_dataset(bin_path, spike_index, geom, save_path, we=None, 
@@ -801,11 +799,19 @@ def make_dataset(bin_path, spike_index, geom, save_path, we=None,
     if not os.path.exists(save_path):
         os.makedirs(save_path)
 
-    # if save_covs:
-    #     if we is not None:
-    #         save_sim_covs(bin_path, save_path)
-    #     else:
-    #         save_real_covs(bin_path, save_path)
+    if save_covs:
+        if we is not None:
+            save_sim_covs(bin_path, save_path)
+        else:
+            save_real_covs(bin_path, save_path)
+    else:
+        dir_path = os.path.abspath(os.path.dirname(__file__))
+        print(f"copying over noise covariances from previous recording from {dir_path}/noise_covariances_IBL_dy016")
+        spatial_cov = np.load(dir_path + '/noise_covariances_IBL_dy016/spatial_cov.npy')
+        temporal_cov = np.load(dir_path + '/noise_covariances_IBL_dy016/temporal_cov.npy')
+        np.save(os.path.join(save_path, 'spatial_cov.npy'), spatial_cov)
+        np.save(os.path.join(save_path, 'temporal_cov.npy'), temporal_cov)
+        
     
     if unit_ids is None:
         data_chunks = chunk_data(spike_index, max_proc_len)

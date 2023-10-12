@@ -60,16 +60,16 @@ class CEED(object):
             if self.multi_chan:
                 self.model = Multi_GPT(gptconf)
                 if gpu is not None:
-                    self.model = self.model.cuda(gpu)
+                    self.model = self.model.to(gpu)
             else:
                 self.model = Single_GPT(gptconf)
                 if gpu is not None:
-                    self.model = self.model.cuda(gpu)
+                    self.model = self.model.to(gpu)
         else:
             self.model = ModelSimCLR(base_model=self.arch, out_dim=out_dim, proj_dim=proj_dim, 
                     fc_depth=2, expand_dim=False, multichan=self.multi_chan, input_size=(2*num_extra_chans+1)*121)
             if gpu is not None:
-                self.model = self.model.cuda(gpu)
+                self.model = self.model.to(gpu)
 
 
     def train(
@@ -192,8 +192,7 @@ class CEED(object):
                                disable_cuda=False, temperature=0.07, arch=self.arch,
                                noise_scale=1.0, cell_type=cell_type, gpu=gpu)
         
-        print("starting training...")
-    
+        print("starting training...")    
         simclr = SimCLR(model=self.model, proj=None, optimizer=optimizer, scheduler=scheduler, gpu=gpu, 
                         sampler=None, args=args, start_epoch=start_epoch)
         simclr.train(train_loader, memory_loader, test_loader)

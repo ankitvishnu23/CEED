@@ -247,7 +247,7 @@ class ContrastiveLearningDataset:
         self.use_chan_pos = use_chan_pos
 
     @staticmethod
-    def get_wf_pipeline_transform(self, temp_cov_fn, spatial_cov_fn, noise_scale, num_extra_chans, normalize=False, p_crop=0.5):
+    def get_wf_pipeline_transform(self, temp_cov_fn, spatial_cov_fn, noise_scale, num_extra_chans, normalize=False, p_dict=(0.5, 0.4, 0.7, 0.6)):
         temporal_cov = np.load(os.path.join(self.root_folder, temp_cov_fn))
         spatial_cov = np.load(os.path.join(self.root_folder, spatial_cov_fn))
         """Return a set of data augmentation transformations on waveforms."""
@@ -255,11 +255,9 @@ class ContrastiveLearningDataset:
                                             transforms.RandomApply([Collide(self.root_folder, multi_chan=self.multi_chan)], p=0.4),
                                             Crop(prob=p_crop, num_extra_chans=num_extra_chans),
                                             transforms.RandomApply([AmpJitter()], p=0.7),
-                                              transforms.RandomApply([Jitter()], p=0.6),
-                                            #   transforms.RandomApply([PCA_Reproj(root_folder=self.root_folder)], p=0.4),
-                                            #   transforms.RandomApply([SmartNoise(self.root_folder, temporal_cov, 
-                                            #                                      spatial_cov, noise_scale, normalize)], p=0.5),
-                                              TorchToWfTensor()])
+                                            transforms.RandomApply([Jitter()], p=0.6),
+                                            # smart noise has been moved to the training loop (for GPU)
+                                            TorchToWfTensor()])
         
         return data_transforms
 
