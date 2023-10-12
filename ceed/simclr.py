@@ -1,6 +1,5 @@
 import logging
 import os
-import sys
 
 import numpy as np
 import torch
@@ -10,13 +9,10 @@ import torch.distributed as dist
 
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.cuda.amp import GradScaler, autocast
-from torch.utils.tensorboard import SummaryWriter
-from tqdm import tqdm
 from utils.utils import (
-    save_config_file, save_checkpoint,
-    knn_monitor, gmm_monitor
+    save_checkpoint, knn_monitor, gmm_monitor
 )      
-from utils.ddp_utils import gather_from_all
+# from utils.ddp_utils import gather_from_all
 import tensorboard_logger as tb_logger
 torch.manual_seed(0)
 import time
@@ -53,8 +49,8 @@ class SimCLR(object):
 
     def info_nce_loss(self, features):
 
-        if self.args.ddp:
-            features = gather_from_all(features)
+        # if self.args.ddp:
+        #     features = gather_from_all(features)
         features = torch.squeeze(features)
         features = F.normalize(features, dim=1)
         batch_dim = int(features.shape[0] // 2)

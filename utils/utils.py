@@ -3,70 +3,16 @@ import shutil
 
 import torch
 import torch.nn as nn
-import torch.distributed as dist
-from classy_vision.generic.distributed_util import (
-    convert_to_distributed_tensor,
-    convert_to_normal_tensor,
-    is_distributed_training_run,
-)
 import numpy as np
-from pathlib import Path
-from tqdm.auto import tqdm, trange
-import pandas as pd
 import shutil
 import random
-from sklearn.decomposition import PCA
 
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.model_selection import GridSearchCV
 from sklearn.mixture import GaussianMixture
 from sklearn.metrics import adjusted_rand_score
 
 # import matplotlib.pyplot as plt
 import yaml
 import torch.nn.functional as F
-
-import sys
-
-class GatherLayer(torch.autograd.Function):
-    """
-    Gather tensors from all workers with support for backward propagation:
-    This implementation does not cut the gradients as torch.distributed.all_gather does.
-    """
-
-    @staticmethod
-    def forward(ctx, x):
-        output = [torch.zeros_like(x) for _ in range(dist.get_world_size())]
-        dist.all_gather(output, x)
-        return tuple(output)
-
-    @staticmethod
-    def backward(ctx, *grads):
-        all_gradients = torch.stack(grads)
-        dist.all_reduce(all_gradients)
-        return all_gradients[dist.get_rank()]
-
-
-def gather_from_all(tensor: torch.Tensor) -> torch.Tensor:
-    """
-    Similar to classy_vision.generic.distributed_util.gather_from_all
-    except that it does not cut the gradients
-    """
-    if tensor.ndim == 0:
-        # 0 dim tensors cannot be gathered. so unsqueeze
-        tensor = tensor.unsqueeze(0)
-
-    if is_distributed_training_run():
-        tensor, orig_device = convert_to_distributed_tensor(tensor)
-        gathered_tensors = GatherLayer.apply(tensor)
-        gathered_tensors = [
-            convert_to_normal_tensor(_tensor, orig_device)
-            for _tensor in gathered_tensors
-        ]
-    else:
-        gathered_tensors = [tensor]
-    gathered_tensor = torch.cat(gathered_tensors, 0)
-    return gathered_tensor
 
 
 class AverageMeter(object):
@@ -92,6 +38,7 @@ class AverageMeter(object):
         fmtstr = '{name} {val' + self.fmt + '} ({avg' + self.fmt + '})'
         return fmtstr.format(**self.__dict__)
 
+
 def accuracy(output, target, topk=(1,)):
     """Computes the accuracy over the k top predictions for the specified values of k"""
     with torch.no_grad():
@@ -108,6 +55,7 @@ def accuracy(output, target, topk=(1,)):
             res.append(correct_k.mul_(100.0 / batch_size))
         return res
     
+
 def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
     torch.save(state, filename)
     if is_best:
@@ -119,12 +67,6 @@ def save_config_file(model_checkpoints_folder, args):
         os.makedirs(model_checkpoints_folder)
         with open(os.path.join(model_checkpoints_folder, 'config.yml'), 'w') as outfile:
             yaml.dump(args, outfile, default_flow_style=False)
-
-
-def get_backbone(enc):
-    last_layer = list(list(enc.children())[-1].children())[:-1]
-    enc.fcpart = nn.Sequential(*last_layer)
-    return enc
 
 
 def get_contr_representations(model, data_set, device):
