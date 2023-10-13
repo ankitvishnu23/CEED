@@ -39,12 +39,6 @@ try:
 except ImportError:
     print("Failed to import spike-psvae/dartsort functions")
 
-
-'''
-
-Functions taken from YASS: Yet Another Spike Sorter -  https://github.com/paninski-lab/yass#yass-yet-another-spike sorter
-
-'''
 def kill_signal(recordings, threshold, window_size):
     """
     Thresholds recordings, values above 'threshold' are considered signal
