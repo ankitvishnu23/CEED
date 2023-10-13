@@ -30,7 +30,7 @@ def get_flattened_data(dataset, denoise=False, denoise_path=''):
         if denoise:
             with torch.no_grad():
                 for j in range(curr_wf.shape[0]):
-                    curr_wf[j] = denoiser(torch.from_numpy(curr_wf[j].reshape(1, 121))).cpu().numpy()
+                    curr_wf[j] = denoiser(torch.from_numpy(curr_wf[j].reshape(1, 121).astype('float32'))).cpu().numpy()
         curr_wf = curr_wf.flatten().squeeze().astype('float32')
         wfs_full.append(curr_wf)
         labels_full.append(curr_label)

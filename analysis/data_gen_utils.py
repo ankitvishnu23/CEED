@@ -2,19 +2,13 @@ import spikeinterface.full as si
 import MEArec as mr
 import numpy as np
 import matplotlib.pyplot as plt
-import colorcet as cc
 import math
 import os
-import h5py
 import random
-import logging    
-import datetime
 import numpy as np
 import shutil
 from scipy.spatial.distance import pdist, squareform
 from matplotlib.gridspec import GridSpec
-from tqdm import tqdm
-import torch
 from pathlib import Path
 from tqdm.auto import trange
 import shutil
@@ -408,7 +402,7 @@ def save_sim_covs(rec_path, save_path, spike_length_samples=121):
     np.save(os.path.join(save_path, 'temporal_cov_example.npy'), temporal_cov)
     
     
-# def save_real_covs(rec_path, save_path):
+def save_real_covs(rec_path, save_path, spike_length_samples=121):
     """Create and save temporal and spatial covariance matrices for real data.
     Parameters
     ----------
@@ -419,19 +413,13 @@ def save_sim_covs(rec_path, save_path, spike_length_samples=121):
     spike_length_samples: int
         number of samples for each waveform
     """
-#     recgen = mr.load_recordings(rec_path, load_waveforms=False)
+    sr = spikeglx.Reader(rec_path)
+    rec = sr.read(nsel=slice(None))[0][:, :-1]
     
-#     rec = si.MEArecRecordingExtractor(rec_path)
-#     rec = si.bandpass_filter(rec, dtype='float32')
-#     rec = si.common_reference(rec, reference='global', operator='median')
-#     rec = si.zscore(rec)
+    spatial_cov, temporal_cov = noise_whitener(rec, spike_length_samples, 50)
     
-#     norm_chan_recording = rec.get_traces()
-    
-#     spatial_cov, temporal_cov = noise_whitener(norm_chan_recording, spike_length_samples, 50)
-    
-#     np.save(os.path.join(save_path, '/spatial_cov.npy'), spatial_cov)
-#     np.save(os.path.join(save_path, '/temporal_cov.npy'), temporal_cov)
+    np.save(os.path.join(save_path, '/spatial_cov_example.npy'), spatial_cov)
+    np.save(os.path.join(save_path, '/temporal_cov_example.npy'), temporal_cov)
 
 
 def download_IBL(pid, save_folder, t_window=[0, 500], overwrite=True):
@@ -808,7 +796,6 @@ def make_dataset(bin_path, spike_index, geom, save_path, we=None,
         np.save(os.path.join(save_path, 'spatial_cov.npy'), spatial_cov)
         np.save(os.path.join(save_path, 'temporal_cov.npy'), temporal_cov)
         
-    
     if unit_ids is None:
         data_chunks = chunk_data(spike_index, max_proc_len)
         if spike_index.shape[0] == 3:
