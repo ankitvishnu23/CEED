@@ -24,7 +24,7 @@ class CEED(object):
         out_dim: int = 5,
         proj_dim: int = 5,
         num_extra_chans: int = 0,
-        gpu: int = 0
+        gpu: int = 0,
     ):
         """
         Parameters
@@ -48,14 +48,14 @@ class CEED(object):
         self.arch = model_arch
 
         if self.arch == "gpt":
-            model_args = dict(n_layer=20, n_head=4, n_embd=64, block_size=121*out_dim,
+            model_args = dict(n_layer=20, n_head=4, n_embd=64, block_size=121*(2*self.num_extra_chans+1),
                     bias=True, vocab_size=50304, dropout=0.0, out_dim=out_dim, is_causal=True, 
                     proj_dim=proj_dim, pos='seq_11times', multi_chan=self.multi_chan) 
             gptconf = GPTConfig(**model_args)
             if self.multi_chan:
-                self.model = Multi_GPT(gptconf).cuda(gpu)
+                self.model = Multi_GPT(gptconf).to(gpu)
             else:
-                self.model = Single_GPT(gptconf).cuda(gpu)
+                self.model = Single_GPT(gptconf).to(gpu)
         else:
             self.model = ModelSimCLR(base_model=self.arch, out_dim=out_dim, proj_dim=proj_dim, 
                 fc_depth=2, expand_dim=False, multichan=self.multi_chan, input_size=(2*num_extra_chans+1)*121).cuda(gpu)
