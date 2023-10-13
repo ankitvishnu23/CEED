@@ -28,7 +28,8 @@ install_requires = [
     "tensorflow",
     "torchtyping",
     "typeguard",
-    "umap-learn"
+    "umap-learn",
+    "pyfftw"
 ]
 
 

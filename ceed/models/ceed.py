@@ -46,19 +46,30 @@ class CEED(object):
         self.out_dim = out_dim
         self.num_extra_chans = num_extra_chans
         self.arch = model_arch
+        self.num_classes = 400
+        if gpu is None:
+            self.device = 'cpu'
+        else:
+            self.device = gpu
 
         if self.arch == "gpt":
-            model_args = dict(n_layer=20, n_head=4, n_embd=64, block_size=121*(2*self.num_extra_chans+1),
+            model_args = dict(n_layer=20, n_head=4, n_embd=64, block_size=121 * (2 * self.num_extra_chans + 1),
                     bias=True, vocab_size=50304, dropout=0.0, out_dim=out_dim, is_causal=True, 
-                    proj_dim=proj_dim, pos='seq_11times', multi_chan=self.multi_chan) 
+                    proj_dim=proj_dim, pos='seq_11times', multi_chan=self.multi_chan, num_classes=self.num_classes) 
             gptconf = GPTConfig(**model_args)
             if self.multi_chan:
-                self.model = Multi_GPT(gptconf).to(gpu)
+                self.model = Multi_GPT(gptconf)
+                if gpu is not None:
+                    self.model = self.model.to(gpu)
             else:
-                self.model = Single_GPT(gptconf).to(gpu)
+                self.model = Single_GPT(gptconf)
+                if gpu is not None:
+                    self.model = self.model.to(gpu)
         else:
             self.model = ModelSimCLR(base_model=self.arch, out_dim=out_dim, proj_dim=proj_dim, 
-                fc_depth=2, expand_dim=False, multichan=self.multi_chan, input_size=(2*num_extra_chans+1)*121).cuda(gpu)
+                    fc_depth=2, expand_dim=False, multichan=self.multi_chan, input_size=(2*num_extra_chans+1)*121)
+            if gpu is not None:
+                self.model = self.model.to(gpu)
 
 
     def train(
@@ -181,8 +192,7 @@ class CEED(object):
                                disable_cuda=False, temperature=0.07, arch=self.arch,
                                noise_scale=1.0, cell_type=cell_type, gpu=gpu)
         
-        print("starting training...")
-    
+        print("starting training...")    
         simclr = SimCLR(model=self.model, proj=None, optimizer=optimizer, scheduler=scheduler, gpu=gpu, 
                         sampler=None, args=args, start_epoch=start_epoch)
         simclr.train(train_loader, memory_loader, test_loader)
@@ -232,7 +242,7 @@ class CEED(object):
                 multi_chan=self.multi_chan, use_chan_pos=use_chan_pos, 
                 use_gpt=self.ddp, num_extra_chans=self.num_extra_chans)
         
-        reps_test, labels_test = get_torch_reps(self.model, loader, 0, args)
+        reps_test, labels_test = get_torch_reps(self.model, loader, self.device, args)
 
         return reps_test, labels_test
     
@@ -248,15 +258,14 @@ class CEED(object):
         if self.multi_chan:
             crop_tform = Crop(prob=0.0, num_extra_chans=self.num_extra_chans, ignore_chan_num=True)
             data = apply_transform(transform=crop_tform, data=data)
-            
         loader = torch.utils.data.DataLoader(
             data, batch_size=128, shuffle=False,
             num_workers=8, pin_memory=True, drop_last=False)
-            
+           
         args = SimpleNamespace(ddp=False, rank=0,
                 multi_chan=self.multi_chan, use_chan_pos=False, 
                 use_gpt=self.ddp, num_extra_chans=self.num_extra_chans)
         
-        reps_test = get_torch_reps_nolabels(self.model, loader, 0, args)
+        reps_test = get_torch_reps_nolabels(self.model, loader, self.device, args)
 
         return reps_test

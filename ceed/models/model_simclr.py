@@ -8,41 +8,13 @@ from ceed.models.exceptions import InvalidBackboneError
 from collections import OrderedDict
 import sys
 
-class SingleChanDenoiser(nn.Module):
-    """Cleaned up a little. Why is conv3 here and commented out in forward?"""
-
-    def __init__(
-        # self, n_filters=[16, 8, 4], filter_sizes=[5, 11, 21], spike_size=121
-        self, n_filters=[16, 8], filter_sizes=[5, 11], spike_size=121
-    ):
-        super(SingleChanDenoiser, self).__init__()
-        self.conv1 = nn.Sequential(nn.Conv1d(1, n_filters[0], filter_sizes[0]), nn.ReLU())
-        self.conv2 = nn.Sequential(nn.Conv1d(n_filters[0], n_filters[1], filter_sizes[1]), nn.ReLU())
-        if len(n_filters) > 2:
-            self.conv3 = nn.Sequential(nn.Conv1d(n_filters[1], n_filters[2], filter_sizes[2]), nn.ReLU())
-        n_input_feat = n_filters[1] * (spike_size - filter_sizes[0] - filter_sizes[1] + 2)
-        self.out = nn.Linear(n_input_feat, spike_size)
-
-    def forward(self, x):
-        x = x[:, None]
-        x = self.conv1(x)
-        x = self.conv2(x)
-        # x = self.conv3(x)
-        x = x.view(x.shape[0], -1)
-        return self.out(x)
-
-    def load(self, fname_model):
-        checkpoint = torch.load(fname_model, map_location="cpu")
-        self.load_state_dict(checkpoint, strict=False)
-        return self
-
 
 class Projector(nn.Module):
     ''' Projector network accepts a variable number of layers indicated by depth.
     Option to include batchnorm after every layer.'''
 
     def __init__(self, Lvpj=[512, 128], rep_dim=5, proj_dim=5, bnorm = False, depth = 3):
-        super(Projector, self).__init__()
+        super().__init__()
         print(f"Using projector; batchnorm {bnorm} with depth {depth}; hidden_dim={Lvpj[0]}")
         nlayer = [nn.BatchNorm1d(Lvpj[0])] if bnorm else []
         list_layers = [nn.Linear(rep_dim, Lvpj[0])] + nlayer + [nn.ReLU()]
@@ -61,7 +33,7 @@ class Projector2(nn.Module):
     Option to include batchnorm after every layer.'''
 
     def __init__(self, Lvpj=[128], rep_dim=5, proj_dim=5, bnorm = False, depth = 2):
-        super(Projector2, self).__init__()
+        super().__init__()
         print(f"Using projector; batchnorm {bnorm} with depth {depth}; hidden_dim={Lvpj[0]}")
         nlayer = [nn.BatchNorm1d(Lvpj[0])] if bnorm else []
         list_layers = [nn.Linear(rep_dim, Lvpj[0])] + nlayer + [nn.ReLU()]
@@ -77,7 +49,7 @@ class Projector2(nn.Module):
 
 class Encoder(nn.Module):
     def __init__(self, Lv=[200, 150, 100, 75], ks=[11, 21, 31], out_size = 2, proj_dim=5, fc_depth=2, input_size=121):
-        super(Encoder, self).__init__()
+        super().__init__()
         print("init Encoder")
         self.proj_dim = out_size if out_size < proj_dim else proj_dim
         self.enc_block1d = nn.Sequential(
@@ -127,7 +99,7 @@ class Encoder(nn.Module):
 
 class Encoder2(nn.Module):
     def __init__(self, Lv=[64, 128, 256, 256, 256], ks=[11], out_size = 2, proj_dim=5, fc_depth=2, input_size=121):
-        super(Encoder2, self).__init__()
+        super().__init__()
         self.proj_dim = out_size if out_size < proj_dim else proj_dim
         self.enc_block1d = nn.Sequential(
             nn.Conv1d(in_channels=1, out_channels=Lv[0], kernel_size=ks[0], padding=math.ceil((ks[0]-1)/2)),
@@ -156,15 +128,10 @@ class Encoder2(nn.Module):
         list_layers += [Projector(rep_dim=out_size, proj_dim=self.proj_dim)]
         
         self.fcpart = nn.Sequential(*list_layers)
-        
-        # nn.Sequential(
-        #     nn.Linear(Lv[2] * 1 * 1, Lv[3]),
-        #     nn.ReLU(),
-        #     # nn.Dropout(p=0.2),
-        #     nn.Linear(Lv[3], out_size),
-        #     )
+
         self.Lv = Lv
         # self.projector = Projector2(rep_dim=out_size, proj_dim=self.proj_dim)
+        
     def forward(self, x):
         x = self.enc_block1d(x)
         # print(x.shape)
@@ -176,8 +143,9 @@ class Encoder2(nn.Module):
 
 class FullyConnectedEnc(nn.Module):
     def __init__(self, input_size=121, Lv=[768, 512, 256], out_size=2, proj_dim=5, fc_depth=2, multichan=False):
-        super(FullyConnectedEnc, self).__init__()
-        self.proj_dim = out_size if out_size < proj_dim else proj_dim
+        super().__init__()
+     #   self.proj_dim = out_size if out_size < proj_dim else proj_dim
+        self.proj_dim = proj_dim
         self.input_size = input_size
         self.multichan = multichan
 
@@ -233,7 +201,6 @@ class Squeeze(nn.Module):
         Args:
             inp: 1-3D input tensor
 
-        Returns:
             If the third dimension of the input tensor can be squeezed,
             return the resulting 2D output tensor. If input is 2D or less,
             return the input.
@@ -278,7 +245,7 @@ class _Skip(nn.Module):
 
 class CEBRA(nn.Module):
     def __init__(self, num_units=32, out_size = 2, proj_dim=5, fc_depth=2, input_size=121, multichan=False):
-        super(CEBRA, self).__init__()
+        super().__init__()
         print("init CEBRA Encoder")
         self.proj_dim = out_size if out_size < proj_dim else proj_dim
         self.multichan = multichan
@@ -351,7 +318,7 @@ class PositionalEncoding(nn.Module):
 
 class AttentionEnc(nn.Module):
     def __init__(self, spike_size=121, n_channels=1, out_size=2, proj_dim=5, fc_depth=2, nlayers=9, nhead=8, dropout=0.1, expand_dim=16, cls_head=None):
-        super(AttentionEnc, self).__init__()
+        super().__init__()
         self.spike_size = spike_size
         self.expand_dim = expand_dim
         self.proj_dim = out_size if out_size < proj_dim else proj_dim
@@ -435,7 +402,7 @@ class AttentionEnc(nn.Module):
 
 class MultiChanAttentionEnc1(nn.Module):
     def __init__(self, spike_size=121, n_channels=11, out_size=2, proj_dim=5, fc_depth=2, nlayers=9, nhead=8, dropout=0.1, expand_dim=16, cls_head=None):
-        super(MultiChanAttentionEnc1, self).__init__()
+        super().__init__()
         self.spike_size = spike_size
         self.expand_dim = expand_dim
         self.n_channels = n_channels
@@ -471,17 +438,6 @@ class MultiChanAttentionEnc1(nn.Module):
             
         self.fcpart = nn.Sequential(*list_layers)
         
-        # self.fcpart = nn.Sequential(
-        #     nn.Linear(self.spike_size * expand_dim, self.spike_size),
-        #     nn.ReLU(),
-        #     nn.Linear(self.spike_size, out_size),
-            
-        #     # nn.ReLU(),
-        #     # nn.Dropout(p=0.2),
-        #     # nn.Linear(5 * self.spike_size * expand_dim, out_size),
-        #     Projector(rep_dim=out_size, proj_dim=self.proj_dim)
-        # )
-
     def init_weights(self) -> None:
         initrange = 0.1
         # self.encoder.weight.data.uniform_(-initrange, initrange)
@@ -496,18 +452,6 @@ class MultiChanAttentionEnc1(nn.Module):
         Returns:
             output Tensor of shape [batch_size, proj_dim]
         """
-        # src = torch.transpose(src, 1, 2)
-
-        # for chan in range(self.n_channels):
-        #     curr_chan = src[:, :, chan]
-        #     curr_chan = torch.unsqueeze(curr_chan, dim=2)
-        #     # curr_chan = torch.transpose(curr_chan, 1, 2)
-        #     if self.expand_dim != 1:
-        #         curr_chan = self.encoder(curr_chan) * math.sqrt(self.expand_dim)
-        #     curr_chan = self.pos_encoder(curr_chan)
-        #     curr_chan = self.transformer_encoder(curr_chan, src_mask)
-        #     # src[:, chan] = torch.transpose(curr_chan, 1, 2)
-        #     src[:, :, chan] = curr_chan
         
         if self.expand_dim != 1:
             src = torch.unsqueeze(src, dim=-1)
@@ -516,8 +460,6 @@ class MultiChanAttentionEnc1(nn.Module):
         src = src.permute(1, 0, 2) # remove batch_first argument needs Batch in second dim
         
         output = self.transformer_encoder(src, src_mask)
-        # output = output.view(-1, self.n_channels, self.spike_size, self.expand_dim)
-        # output = torch.transpose(src, 1, 2)
         output = output.permute(1, 0, 2)
         output = output.reshape(-1, self.n_channels, self.spike_size * self.expand_dim)
         output = torch.transpose(output, 1, 2)
@@ -543,45 +485,33 @@ class MultiChanAttentionEnc1(nn.Module):
 
 model_dict = { "custom_encoder": Encoder,
                            "custom_encoder2": Encoder2,
-                            "denoiser": SingleChanDenoiser,
                             "fc_encoder": FullyConnectedEnc,
                             "attention": AttentionEnc,
                             "attention_multichan": MultiChanAttentionEnc1,
                             "cebra": CEBRA,
-                            # "resnet18": models.resnet18(pretrained=False, num_classes=out_dim),
-                            # "resnet50": models.resnet50(pretrained=False, num_classes=out_dim)
                             }
 
 class ModelSimCLR(nn.Module):
 
     def __init__(self, base_model, out_dim, proj_dim, fc_depth=2, expand_dim=16, ckpt=None, cls_head=None, multichan=True, input_size=121):
-        super(ModelSimCLR, self).__init__()
-        
+        super().__init__()
         base_model += '_multichan' if multichan and 'attention' in base_model else ''
-
         if "attention" in base_model:
             self.backbone = model_dict[base_model](out_size=out_dim, proj_dim=proj_dim, fc_depth=fc_depth, expand_dim=expand_dim, cls_head=cls_head)
         else:
             self.backbone = model_dict[base_model](out_size=out_dim, proj_dim=proj_dim, fc_depth=fc_depth, input_size=input_size, multichan=multichan)
-
-        # self.backbone = self._get_basemodel(base_model)
         print("number of encoder params: ", sum(p.numel() for p in self.backbone.parameters()))
         print("number of transfomer params: ", sum(p.numel() for n,p in self.backbone.named_parameters() if 'transformer_encoder' in n))
         print("number of fcpart params: ", sum(p.numel() for n,p in self.backbone.named_parameters() if ('fcpart' in n and 'proj' not in n)))
         print("number of Proj params: ", sum(p.numel() for n,p in self.backbone.named_parameters() if ('fcpart' in n and 'proj' in n)))
         print("number of classifier params: ", sum(p.numel() for n,p in self.backbone.named_parameters() if 'cls_head' in n))
-        
-        
-        if base_model == "denoiser":
-            # add mlp projection head
-            self.backbone.fc = nn.Sequential(self.backbone.fc, Projector(rep_dim=out_dim, proj_dim=proj_dim))
 
     def _get_basemodel(self, model_name):
         try:
             model = self.model_dict[model_name]
         except KeyError:
             raise InvalidBackboneError(
-                "Invalid backbone architecture. Check the config file and pass one of: basic_backbone, resnet18, or resnet50")
+                "Invalid backbone architecture")
         else:
             return model
 

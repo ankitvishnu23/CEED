@@ -99,7 +99,11 @@ def get_torch_reps(net, data_loader, device, args):
             else:
                 feature = net(data.to(device=device, non_blocking=True))
                 feature = torch.squeeze(feature)
-            feature = F.normalize(feature, dim=1)
+            if len(feature.shape) > 1:
+                dim = 1
+            else:
+                dim = 0
+            feature = F.normalize(feature, dim=dim)
             feature_bank.append(feature)
             feature_labels = torch.cat((feature_labels, target))
         # [D, N]
@@ -115,13 +119,18 @@ def get_torch_reps_nolabels(net, data_loader, device, args):
     with torch.no_grad():
         # generate feature bank
         for data in data_loader:
+            data = data.to(dtype=torch.float32)
             if args.use_gpt:
                 data = data.view(-1, (args.num_extra_chans*2+1)*121) if args.multi_chan else torch.squeeze(data, dim=1)
                 feature = net(data.to(device=device, non_blocking=True).unsqueeze(dim=-1))
             else:
                 feature = net(data.to(device=device, non_blocking=True))
                 feature = torch.squeeze(feature)
-            feature = F.normalize(feature, dim=1)
+            if len(feature.shape) > 1:
+                dim = 1
+            else:
+                dim =0
+            feature = F.normalize(feature, dim=dim)
             feature_bank.append(feature)
         # [D, N]
         feature_bank = torch.cat(feature_bank, dim=0).cpu().numpy()
@@ -279,10 +288,10 @@ def save_reps(model, loader, ckpt_path, split='train', multi_chan=False,rep_afte
             feature_bank.append(feature)
             
         feature_bank = torch.cat(feature_bank, dim=0)
-        print(feature_bank.shape)
         if rep_after_proj:
             torch.save(feature_bank, os.path.join(ckpt_root_dir, f'{split}_aftproj_reps{suffix}.pt'))
             print(f"saved {split} features to {ckpt_root_dir}/{split}_aftproj_reps{suffix}.pt")
         else:
             torch.save(feature_bank, os.path.join(ckpt_root_dir, f'{split}_reps{suffix}.pt'))
             print(f"saved {split} features to {ckpt_root_dir}/{split}_reps{suffix}.pt")
+            

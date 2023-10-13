@@ -123,7 +123,7 @@ class SimCLR(object):
                 # if not self.multichan:
                 #     wf = torch.unsqueeze(wf, dim=1)
                 wf = wf.cuda(self.gpu)
-                wf = torch.stack([self.noise_transform([wf[i], chan_nums[i]]) for i in range(wf.shape[0])])
+                wf = torch.stack([self.noise_transform([wf[i], chan_nums[i]]) for i in range(wf.shape[0])]) #smart_noise on GPU
 
                 if self.args.use_gpt:
                     if not self.args.multi_chan:

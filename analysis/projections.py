@@ -1,6 +1,6 @@
 import umap.umap_ as umap
 from sklearn.decomposition import PCA
-from ceed.models.model_simclr import SingleChanDenoiser
+from analysis.denoising import SingleChanDenoiser
 from tqdm import tqdm
 import numpy as np
 import torch
