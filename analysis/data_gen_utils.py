@@ -490,6 +490,7 @@ def download_IBL(pid, save_folder, t_window=[0, 500], overwrite=True):
     if not standardized_file.exists():
         print("running destriping")
         batch_size_secs = 1
+        assert sr.rl > 80, "download window must be larger than 4"
         batch_intervals_secs = 50
         # scans the file at constant interval, with a demi batch starting offset
         nbatches = int(
@@ -519,15 +520,15 @@ def download_IBL(pid, save_folder, t_window=[0, 500], overwrite=True):
             dtype=np.float32,
             nc_out=sr.nc - sr.nsync,
         )
-
+        # also copy the companion meta-data file
         metadata_file = standardized_file.parent.joinpath(
                 f"{sr.file_meta_data.stem}.normalized.meta"
             )
-        # also copy the companion meta-data file
         shutil.copy(
             sr.file_meta_data,
             metadata_file,
         )
+        
         print("done with destriping")
     metadata_file = standardized_file.parent.joinpath(
                 f"{sr.file_meta_data.stem}.normalized.meta"
@@ -569,6 +570,7 @@ def extract_IBL(bin_fp, meta_fp, pid, t_window=[0, 1100], use_labels=True, sampl
     
     geom = read_geom_from_meta(Path(meta_fp))
     spike_times = spikes['times']
+    print(spike_times)
     spike_frames = sl.samples2times(spike_times, direction='reverse').astype('int')
     spike_train = np.concatenate((spike_frames.copy()[:,None], spikes['clusters'].copy()[:,None]), axis=1)
     in_rec_idxs = np.where((spike_frames >= t_window[0]*sampling_frequency) & (spike_frames <= t_window[1]*sampling_frequency))[0]
