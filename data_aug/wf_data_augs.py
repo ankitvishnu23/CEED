@@ -391,8 +391,12 @@ class Crop(object):
     def __call__(self, sample):
         if len(sample) == 3:
             wf, chan_nums, chan_locs = sample
-        else:
+        elif len(sample) == 2:
             wf, chan_nums = sample
+            chan_locs = None
+        else: 
+            wf = sample
+            chan_nums = None
             chan_locs = None
         
         if len(wf.shape) == 1:
@@ -422,8 +426,8 @@ class Crop(object):
             wf = np.expand_dims(wf, axis=0)
         if self.ignore_chan_num:
             if chan_locs is not None:
-                return wf, chan_locs
-            return wf
+                return wf.astype('float16'), chan_locs
+            return wf.astype('float16')
         
         if chan_locs is None:
             return [wf, chan_nums]
