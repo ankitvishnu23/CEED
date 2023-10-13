@@ -23,9 +23,6 @@ git clone https://github.com/ankitvishnu23/CEED.git
 cd CEED
 pip install -r requirements.txt
 ```
-
-<<<<<<< HEAD
-=======
 Once this is done, you will need to download and install the dartsort package, which is used for data generation procedures:
 ```console
 git clone https://github.com/cwindolf/dartsort.git
@@ -33,7 +30,6 @@ cd dartsort
 pip install -r requirements.txt
 ```
 
->>>>>>> 4d42bb1 (Update README.md)
 ### For macOS users only:
 To use the ibllib package, which is involved in dataset generation, Qt5 must be installed separate from pip. 
 We will use homebrew to install it (install at https://brew.sh/ if you have not already) using the following command:
@@ -58,8 +54,6 @@ git clone https://github.com/ankitvishnu23/CEED.git
 cd CEED
 pip install -r requirements.txt
 ```
-<<<<<<< HEAD
-=======
 
 Once this is done, you will need to download and install the dartsort package, which is used for data generation procedures:
 ```console
@@ -67,4 +61,3 @@ git clone https://github.com/cwindolf/dartsort.git
 cd dartsort
 pip install -r requirements.txt
 ```
->>>>>>> 4d42bb1 (Update README.md)
