@@ -1,12 +1,26 @@
-from sklearn.mixture import GaussianMixture
 import hdbscan
 import numpy as np
+import warnings
+
+from collections import defaultdict
+import six
+from sklearn.utils.validation import check_is_fitted
+from sklearn.utils import check_random_state, gen_batches, check_array
+from sklearn.base import BaseEstimator, ClusterMixin
+from sklearn.neighbors import NearestNeighbors
 from sklearn.cluster import KMeans
+from sklearn.mixture import GaussianMixture
+from sklearn.metrics.pairwise import pairwise_distances_argmin
+from joblib import Parallel
+from joblib import delayed
+from joblib import effective_n_jobs
+
 
 def KMeansClustering(train_reps, test_reps, n_clusters=10, random_state=0):
     kmeans = KMeans(n_clusters=n_clusters, random_state=random_state).fit(train_reps)
     test_labels = kmeans.predict(test_reps)
     return test_labels
+
 
 def GMM(train_reps, test_reps, n_clusters=10, random_state=0):
     test_labels = []
@@ -18,10 +32,12 @@ def GMM(train_reps, test_reps, n_clusters=10, random_state=0):
     bic_scores_train = gmm.bic(train_reps)
     return test_labels, bic_scores_test, bic_scores_train
 
+
 def HDBSCAN(test_reps, min_samples=20, min_cluster_size=20):
     clusterer = hdbscan.HDBSCAN(min_samples=min_samples, min_cluster_size=min_cluster_size)
     clusterer.fit(test_reps)
     return clusterer.labels_
+
 
 def HDBSCAN_assign_outliers(data, min_samples=20, min_cluster_size=20):
     clusterer = hdbscan.HDBSCAN(min_samples=min_samples, min_cluster_size=min_cluster_size, prediction_data=True)
@@ -49,21 +65,6 @@ Seeding is performed using a binning technique for scalability.
 #          Alexandre Gramfort <alexandre.gramfort@inria.fr>
 #          Gael Varoquaux <gael.varoquaux@normalesup.org>
 #          Martino Sorbaro <martino.sorbaro@ed.ac.uk>
-
-import numpy as np
-import warnings
-
-from collections import defaultdict
-import six
-from sklearn.utils.validation import check_is_fitted
-from sklearn.utils import check_random_state, gen_batches, check_array
-from sklearn.base import BaseEstimator, ClusterMixin
-from sklearn.neighbors import NearestNeighbors
-from sklearn.metrics.pairwise import pairwise_distances_argmin
-from joblib import Parallel
-from joblib import delayed
-from joblib import effective_n_jobs
-
 def estimate_bandwidth(X, quantile=0.3, n_samples=None, random_state=0,
                        n_jobs=None):
     """Estimate the bandwidth to use with the mean-shift algorithm.

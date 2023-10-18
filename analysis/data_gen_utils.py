@@ -33,6 +33,7 @@ try:
 except ImportError:
     print("Failed to import spike-psvae/dartsort functions")
 
+
 def kill_signal(recordings, threshold, window_size):
     """
     Thresholds recordings, values above 'threshold' are considered signal
@@ -93,6 +94,7 @@ def kill_signal(recordings, threshold, window_size):
 
     return recordings, is_noise_idx
 
+
 def noise_whitener(recordings, temporal_size, window_size, sample_size=1000,
                    threshold=3.0, max_trials_per_sample=10000,
                    allow_smaller_sample_size=False):
@@ -151,6 +153,7 @@ def noise_whitener(recordings, temporal_size, window_size, sample_size=1000,
     temporal_SIG = np.matmul(np.matmul(v, np.diag(np.sqrt(w))), v.T)
 
     return spatial_SIG, temporal_SIG
+
 
 def search_noise_snippets(recordings, is_noise_idx, sample_size,
                           temporal_size, channel_choices=None,
@@ -279,26 +282,25 @@ def pad_channels(wf, geoms, mc_start, mc_end, n_chans, spike_length_samples=121)
     Parameters
     ----------
     wf: numpy.ndarray
-        spike that has shape (n_chans, spike_length_samples)
+        spike that has shape (n_extracted_chans, spike_length_samples)
     geoms: numpy.ndarray
-        probe geometry locations for wf. has shape (n_chans, (2/3)) for x, y(, z) locations of each channel
+        probe geometry locations for wf. has shape (n_extracted_chans, (2/3)) for x, y(, z) locations of each channel
     mc_start: int
-        start channel number
+        start channel number of wf
     mc_end: int
-        end channel number in contiguous channel extraction
+        end channel number of wf in contiguous channel extraction
     n_chans: int
-        number of channels in the data
+        number of channels that waveform should have in the data
     spike_length_samples: int
         number of samples for each waveform
     Returns
     -------
     zero padded versions of each of the wf, geom, and channel numbers, with a mask for each padded channel
     """
+    # determine which probe boundary the waveform has hit
     curr_n_chans = mc_end - mc_start
     pad_beg = n_chans - curr_n_chans if mc_start == 0 else 0
     pad_end = n_chans - curr_n_chans if mc_start > 0 else 0
-    
-    wf_len = wf.shape[0]
     
     pad_beg_wf = np.zeros((pad_beg, spike_length_samples))
     pad_end_wf = np.zeros((pad_end, spike_length_samples))
@@ -387,8 +389,6 @@ def save_sim_covs(rec_path, save_path, spike_length_samples=121):
     spike_length_samples: int
         number of samples for each waveform
     """
-    recgen = mr.load_recordings(rec_path, load_waveforms=False)
-    
     rec = si.MEArecRecordingExtractor(rec_path)
     rec = si.bandpass_filter(rec, dtype='float32')
     rec = si.common_reference(rec, reference='global', operator='median')
@@ -418,8 +418,8 @@ def save_real_covs(rec_path, save_path, spike_length_samples=121):
     
     spatial_cov, temporal_cov = noise_whitener(rec, spike_length_samples, 50)
     
-    np.save(os.path.join(save_path, '/spatial_cov_example.npy'), spatial_cov)
-    np.save(os.path.join(save_path, '/temporal_cov_example.npy'), temporal_cov)
+    np.save(os.path.join(save_path, 'spatial_cov_example.npy'), spatial_cov)
+    np.save(os.path.join(save_path, 'temporal_cov_example.npy'), temporal_cov)
 
 
 def download_IBL(pid, save_folder, t_window=[0, 500], overwrite=True):
@@ -445,6 +445,7 @@ def download_IBL(pid, save_folder, t_window=[0, 500], overwrite=True):
     eid, probe = one.pid2eid(pid)
     band = 'ap' # either 'ap' or 'lf'
 
+    # Use IBL streamer to download the data 
     sr = Streamer(pid=pid, one=one, remove_cached=False, typ=band)
     sr._download_raw_partial(first_chunk=t_window[0], last_chunk=t_window[1] - 1)
     print(sr.one.load_dataset(sr.eid, f'*.{band}.meta', collection=f"*{sr.pname}"))
@@ -465,10 +466,13 @@ def download_IBL(pid, save_folder, t_window=[0, 500], overwrite=True):
             print(str(folder) + " already exists and overwrite=False. skipping destriping.")
     
     binary = Path(sr.file_bin)
-    standardized_file = folder / f"{binary.stem}.normalized.bin"
     # run destriping
     sr = spikeglx.Reader(binary)
     h = sr.geometry
+    standardized_file = folder / f"{binary.stem}.normalized.bin"
+    metadata_file = standardized_file.parent.joinpath(
+                f"{sr.file_meta_data.stem}.normalized.meta"
+            )
     if not standardized_file.exists():
         print("running destriping")
         batch_size_secs = 1
@@ -502,19 +506,17 @@ def download_IBL(pid, save_folder, t_window=[0, 500], overwrite=True):
             dtype=np.float32,
             nc_out=sr.nc - sr.nsync,
         )
-        # also copy the companion meta-data file
-        metadata_file = standardized_file.parent.joinpath(
-                f"{sr.file_meta_data.stem}.normalized.meta"
-            )
+
         shutil.copy(
             sr.file_meta_data,
             metadata_file,
         )
         
         print("done with destriping")
-    metadata_file = standardized_file.parent.joinpath(
-                f"{sr.file_meta_data.stem}.normalized.meta"
-            )
+    else:
+        print("destriped file for this recording already exists! \
+              location is {}. aborting destriping...".format(standardized_file))
+
     return standardized_file, metadata_file
     
 
@@ -550,15 +552,16 @@ def extract_IBL(bin_fp, meta_fp, pid, t_window=[0, 1100], use_labels=True, sampl
     spikes, clusters, channels = sl.load_spike_sorting()
     clusters = sl.merge_clusters(spikes, clusters, channels)
     
+    # Read in the spike train and geometry information for the portion of the recording we are using.
     geom = read_geom_from_meta(Path(meta_fp))
     spike_times = spikes['times']
-    print(spike_times)
     spike_frames = sl.samples2times(spike_times, direction='reverse').astype('int')
     spike_train = np.concatenate((spike_frames.copy()[:,None], spikes['clusters'].copy()[:,None]), axis=1)
     in_rec_idxs = np.where((spike_frames >= t_window[0]*sampling_frequency) & (spike_frames <= t_window[1]*sampling_frequency))[0]
     spike_train = spike_train[in_rec_idxs, :]
     spike_train[:, 0] = spike_train[:, 0] - t_window[0]*sampling_frequency
 
+    # Create channel index
     channel_index = make_contiguous_channel_index(geom.shape[0], n_neighbors=40)
     closest_channel_list = []
     for cluster_id in spikes['clusters']:
@@ -567,6 +570,7 @@ def extract_IBL(bin_fp, meta_fp, pid, t_window=[0, 1100], use_labels=True, sampl
     closest_channels = np.asarray(closest_channel_list)
     closest_channels = closest_channels[in_rec_idxs]
     
+    # Align the spike train and get templates for each putative neural unit
     aligned_spike_train, order, templates, template_shifts = spike_train_utils.clean_align_and_get_templates(spike_train, geom.shape[0], bin_fp)
     templates, _ = snr_templates.get_templates(aligned_spike_train, geom, bin_fp, closest_channels, reducer=np.median, do_temporal_decrease=False)
     mcs = np.array([templates[unit_id].ptp(0).argmax(0) for unit_id in range(len(templates))])
@@ -761,12 +765,10 @@ def make_dataset(bin_path, spike_index, geom, save_path, we=None,
     masks_array = []
     chosen_units = []
     labels_array = []
-    spike_frames_templates = []
     curr_row = 0
     max_proc_len = 25000
     num_template_amps_shift = 4
     spike_length_to_extract = 131 if shift else 121
-    spike_length_samples = 121
     num_chans = math.floor(num_chans_extract/2)
     tot_num_chans = geom.shape[0]
     if we is not None:

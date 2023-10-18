@@ -57,29 +57,43 @@ def accuracy(output, target, topk=(1,)):
     
 
 def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
+    """Saves checkpoint of the model"""
     torch.save(state, filename)
     if is_best:
         shutil.copyfile(filename, 'model_best.pth.tar')
 
 
 def save_config_file(model_checkpoints_folder, args):
+    """Saves config args to a folder as a config file"""
     if not os.path.exists(model_checkpoints_folder):
         os.makedirs(model_checkpoints_folder)
         with open(os.path.join(model_checkpoints_folder, 'config.yml'), 'w') as outfile:
             yaml.dump(args, outfile, default_flow_style=False)
 
 
-def get_contr_representations(model, data_set, device):
+def get_contr_representations(model, data_set, device='cpu'):
+    """Computes representations of data using a model. Will not work with multichan or Transformer encoders."""
     reps = []
     for item in data_set:
         with torch.no_grad():
             wf = torch.from_numpy(item.reshape(1, 1, -1)).to(device)
             rep = model(wf)
-        reps.append(rep.detach().cpu().numpy())    
+        reps.append(rep.cpu().numpy())    
     return np.squeeze(np.array(reps))
 
 
 def get_torch_reps(net, data_loader, device, args):
+    """Computes representations of waveforms and returns them with the corresponding labels
+    Args:
+        net:
+            encoder network to use for extracting representations.
+        data_loader: torch.utils.DataLoader
+            data loader built from a WF Dataset.
+        device: str
+            'cuda' or 'cpu' device.
+        args: Namespace
+            configurations for model loading.
+    """
     feature_bank = []
     feature_labels = torch.tensor([])
     with torch.no_grad():
@@ -115,6 +129,17 @@ def get_torch_reps(net, data_loader, device, args):
 
 
 def get_torch_reps_nolabels(net, data_loader, device, args):
+    """Computes representations of waveforms and returns them
+    Args:
+        net:
+            encoder network to use for extracting representations.
+        data_loader: torch.utils.DataLoader
+            data loader built from a WF Dataset.
+        device: str
+            'cuda' or 'cpu' device.
+        args: Namespace
+            configurations for model loading.
+    """
     feature_bank = []
     with torch.no_grad():
         # generate feature bank
@@ -139,6 +164,13 @@ def get_torch_reps_nolabels(net, data_loader, device, args):
 
 
 def apply_transform(transform, data):
+    """Applies transformation specified to wfs
+    Args:
+        transform: object
+            transform defined in wf_data_augs.
+        data:
+            wfs to transform.
+    """
     transformed_data = np.array([transform(d) for d in data])
     return transformed_data
 
@@ -294,4 +326,3 @@ def save_reps(model, loader, ckpt_path, split='train', multi_chan=False,rep_afte
         else:
             torch.save(feature_bank, os.path.join(ckpt_root_dir, f'{split}_reps{suffix}.pt'))
             print(f"saved {split} features to {ckpt_root_dir}/{split}_reps{suffix}.pt")
-            

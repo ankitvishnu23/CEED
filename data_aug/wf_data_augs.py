@@ -13,13 +13,16 @@ warnings.filterwarnings("ignore")
 
 
 class AmpJitter(object):
-    """Rescale the image in a sample to a given size.
-    Args:
-        output_size (tuple or int): Desired output size. If tuple, output is
-            matched to output_size. If int, smaller of image edges is matched
-            to output_size keeping aspect ratio the same.
+    """Rescales waveform amplitude by some small factor
     """
     def __init__(self, lo=0.9, hi=1.1):
+        """
+        Args:
+            lo: float
+                the low end of the amplitude distortion.
+            hi: float
+                the high end of the amplitude distortion.
+        """
         self.lo = lo
         self.hi = hi
 
@@ -36,6 +39,7 @@ class AmpJitter(object):
             wf = np.expand_dims(wf, axis=0)
         n_chans = wf.shape[0]
         
+        # randomly select amp jitter scaling value and apply to waveform in each channel
         amp_jit_value = np.random.uniform(self.lo, self.hi)
         amp_jit = np.array([amp_jit_value for i in range(n_chans)])
 
@@ -48,11 +52,7 @@ class AmpJitter(object):
 
 
 class GaussianNoise(object):
-    """Rescale the image in a sample to a given size.
-    Args:
-        output_size (tuple or int): Desired output size. If tuple, output is
-            matched to output_size. If int, smaller of image edges is matched
-            to output_size keeping aspect ratio the same.
+    """Adds Gaussian noise to each waveform
     """
     def __call__(self, sample):
         chan_locs = None
@@ -75,19 +75,26 @@ class GaussianNoise(object):
 
 
 class SmartNoise(object):
-    """Rescale the image in a sample to a given size.
-    Args:
-        output_size (tuple or int): Desired output size. If tuple, output is
-            matched to output_size. If int, smaller of image edges is matched
-            to output_size keeping aspect ratio the same.
+    """Add randomly generated noise from distribution determined by spatial and temporal covariances
     """
-    root_folder = '/Users/ankit/Documents/PaninskiLab/contrastive_spikes/DY016/'
     temporal_name = 'temporal_cov_example.npy'
     spatial_name = 'spatial_cov_example.npy'
 
-    def __init__(self, root_folder=None, temporal_cov=None, spatial_cov=None, noise_scale=1.0, normalize=False):
-        if root_folder is not None:
-            self.root_folder = root_folder
+    def __init__(self, root_folder, temporal_cov=None, spatial_cov=None, noise_scale=1.0, normalize=False):
+        """
+        Args:
+            root_folder: str/Path
+                location at which to retrieve the covariance matrices.
+            temporal_cov: str
+                optional. temporal covariance matrix.
+            spatial_cov: str
+                optional. spatial covariance matrix.
+            noise_scale: float
+                scale the randomly generated noise by this amount.
+            normalize: bool
+                normalize the noise to [0, 1] if True. used for cell type classification model training.    
+        """
+        self.root_folder = root_folder
         if temporal_cov is None:
             temporal_cov = (np.load(os.path.join(self.root_folder, self.temporal_name)))
         if spatial_cov is None:
@@ -129,14 +136,10 @@ class SmartNoise(object):
                         (waveform_length, n_chans_total))[:, chan_nums]
 
         the_noise = np.reshape(np.matmul(noise.T, self.temporal_cov).T, (-1, n_chans))
-
-        # the_noise = np.reshape(np.matmul(reshaped_noise, self.spatial_cov),
-        #                 (waveform_length, n_chans_total))
             
         noise_to_add = the_noise.T
         noise_to_add = self.normalize_wf(noise_to_add) if self.normalize else noise_to_add
         
-        # noise_to_add = self.normalize_wf(the_noise[:, chan_nums].T) if self.normalize else the_noise[:, chan_nums].T
         noise_wfs = self.noise_scale * noise_to_add
         wf = wf + noise_wfs
 
@@ -158,19 +161,31 @@ class SmartNoise(object):
     
 
 class TorchSmartNoise(object):
-    """Rescale the image in a sample to a given size.
-    Args:
-        output_size (tuple or int): Desired output size. If tuple, output is
-            matched to output_size. If int, smaller of image edges is matched
-            to output_size keeping aspect ratio the same.
+    """Add randomly generated noise from distribution determined by spatial and temporal covariances. 
+    Generation and addition happens on gpu for speed purposes.
     """
-    root_folder = '/Users/ankit/Documents/PaninskiLab/contrastive_spikes/DY016/'
     temporal_name = 'temporal_cov_example.npy'
     spatial_name = 'spatial_cov_example.npy'
 
     def __init__(self, root_folder=None, temporal_cov=None, spatial_cov=None, noise_scale=1.0, normalize=False, gpu=0, p=0.5):
-        if root_folder is not None:
-            self.root_folder = root_folder
+        """
+        Args:
+            root_folder: str/Path
+                location at which to retrieve the covariance matrices.
+            temporal_cov: str
+                optional. temporal covariance matrix.
+            spatial_cov: str
+                optional. spatial covariance matrix.
+            noise_scale: float
+                scale the randomly generated noise by this amount.
+            normalize: bool
+                normalize the noise to [0, 1] if True. used for cell type classification model training.   
+            gpu: int
+                gpu num on which to perform torch noise augmentation.
+            p: float
+                noise will be generated and added to waveform with this probability.
+        """
+        self.root_folder = root_folder
         if temporal_cov is None:
             temporal_cov = np.load(os.path.join(self.root_folder, self.temporal_name))
         if spatial_cov is None:
@@ -233,25 +248,22 @@ class TorchSmartNoise(object):
 
 
 class Collide(object):
-    """Rescale the image in a sample to a given size.
-    Args:
-        output_size (tuple or int): Desired output size. If tuple, output is
-            matched to output_size. If int, smaller of image edges is matched
-            to output_size keeping aspect ratio the same.
+    """Select a waveform from the training set, scale it, offset it, and add it in order to simulate a spiking collision
     """
-    root_folder = '/home/jovyan/nyu47-templates/'
-    temp_name = 'spikes_train.npy'
+    spikes_fn = 'spikes_train.npy'
 
-    def __init__(self, root_folder=None, templates=None, multi_chan=False):
-        temp_name = self.temp_name
-        if root_folder is not None:
-            self.root_folder = root_folder
-        # if multi_chan:
-            # temp_name = 'multichan_' + temp_name
-        if templates is None:
-            templates = np.load(os.path.join(self.root_folder, temp_name))
-        # assert isinstance(templates, (array, array))
-        self.templates = templates
+    def __init__(self, root_folder, spikes=None):
+        """
+        Args:
+            root_folder: str/Path
+                location at which to retrieve the spikes file.
+            spikes: numpy.arraylike
+                optional. training set of spikes.
+        """
+        self.root_folder = root_folder
+        if spikes is None:
+            spikes = np.load(os.path.join(self.root_folder, self.spikes_fn))
+        self.spikes = spikes
 
     def __call__(self, sample):
         chan_locs = None
@@ -264,11 +276,9 @@ class Collide(object):
         
         if len(wf.shape) == 1:
             wf = np.expand_dims(wf, axis=0)
-        n_chans = wf.shape[0]
-        w = wf.shape[1]
         
-        temp_idx = np.random.randint(0, len(self.templates))
-        temp_sel = self.templates[temp_idx]
+        temp_idx = np.random.randint(0, len(self.spikes))
+        temp_sel = self.spikes[temp_idx]
         temp_sel = np.expand_dims(temp_sel, axis=0) if len(temp_sel.shape) == 1 else temp_sel
         
         scale = np.random.uniform(0.2, 1)
@@ -305,17 +315,20 @@ class Collide(object):
 
 
 class Jitter(object):
-    """Rescale the image in a sample to a given size.
-    Args:
-        output_size (tuple or int): Desired output size. If tuple, output is
-            matched to output_size. If int, smaller of image edges is matched
-            to output_size keeping aspect ratio the same.
+    """Temporally jitter the waveform through resampling
     """
-
-    def __init__(self, templates=None, up_factor=8, sample_rate=20000, shift=2):
+    def __init__(self, up_factor=8, sample_rate=30000, shift=2):
+        """
+        Args:
+            up_factor: int
+                resample the waveform by this amount.
+            sample_rate: int
+                sampling rate of the recording.
+            shift: int
+                shift the jittered waveform forwards/backwards this number of samples.
+        """
         assert isinstance(up_factor, (int))
         assert isinstance(sample_rate, (int))
-        self.templates = templates
         self.up_factor = up_factor
         self.sample_rate = sample_rate
         self.shift = shift
@@ -338,15 +351,7 @@ class Jitter(object):
             x=wf,
             num=w*self.up_factor,
             axis=1)
-
-        # Torch version
-        # resample = Resample(self.sample_rate, self.up_factor * self.sample_rate)
-        # up_temp = torch.zeros((n_chans, w*self.up_factor))
-        # torch_wf = torch.from_numpy(wf)
-        # for chan in n_chans:
-        #     up_temp[chan] = resample(torch_wf[chan]).t()
-        # up_temp = up_temp.numpy()
-            
+        
         idx = (np.arange(0, w)[:,None]*self.up_factor + np.arange(self.up_factor))
         up_shifted_temp = np.transpose(up_temp[:, idx], (0, 2, 1))
 
@@ -383,7 +388,19 @@ class Jitter(object):
     
 
 class Crop(object):
+    """Crop a subset of channels from the waveform
+    """
     def __init__(self, prob=0.5, num_extra_chans=2, ignore_chan_num=False):
+        """
+        Args:
+            prob: float
+                crop will be applied to waveform with this probability.
+            num_extra_chans: int
+                number of channels on each side of max channel to use for crop window. 
+                total number of channels in cropped wf will be (2 * num_extra_chans + 1)
+            ignore_chan_num: bool
+                whether to return channel numbers and locations if they are present.
+        """
         self.prob = prob
         self.num_extra_chans = num_extra_chans
         self.ignore_chan_num = ignore_chan_num
@@ -402,7 +419,6 @@ class Crop(object):
         if len(wf.shape) == 1:
             wf = np.expand_dims(wf, axis=0)
         n_chans = wf.shape[0]
-        n_times = wf.shape[1]
         
         max_chan_ind = math.floor(n_chans/2)
 
@@ -436,16 +452,20 @@ class Crop(object):
 
 
 class PCA_Reproj(object):
-    """Rescale the image in a sample to a given size.
-    Args:
-        output_size (tuple or int): Desired output size. If tuple, output is
-            matched to output_size. If int, smaller of image edges is matched
-            to output_size keeping aspect ratio the same.
+    """Fits PCA on set of spikes and reprojects a spike through PCA object
     """
-    root_folder = '/datastores/dy016'
     spikes_file = 'spikes_train.npy'
 
     def __init__(self, root_folder=None, spikes_file=None, pca_dim=5):
+        """
+        Args:
+            root_folder: str/Path
+                location at which to retrieve the spikes file.
+            spikes_file: str
+                file containing set of spikes used, on which PCA will be fit.
+            pca_dim: int
+                number of dimensions to be kept with PCA and which will be used to reconstruct wf.
+        """
         assert isinstance(pca_dim, (int))
         if root_folder is not None:
             self.root_folder = root_folder
@@ -464,13 +484,19 @@ class PCA_Reproj(object):
 
 
 class ElectrodeDropout(object):
+    """Zero out a channel to mimic the electrode breaking.
+    """
     def __init__(self, prob=0.1):
+        """
+        Args:
+            prob: float
+                each channel will be dropped with this probability.
+        """
         self.p_drop_chan = prob
         
     def __call__(self, wf):
         n_chan, n_times = wf.shape
         chan_mask = -1 * np.random.binomial(1, self.p_drop_chan, n_chan) + 1
-        print(chan_mask)
         
         wf[chan_mask == 0] = np.zeros(n_times)
         return wf

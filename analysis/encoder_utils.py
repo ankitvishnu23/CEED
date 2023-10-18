@@ -3,11 +3,14 @@ from ceed.models.model_simclr import Encoder, Encoder2, FullyConnectedEnc, Atten
 from analysis.projections import pca_train, pca
 from analysis.plotting import plot_contr_v_pca
 from utils.load_models import get_backbone
+from utils.utils import get_contr_representations
+
 
 def get_enc_backbone(enc):
     last_layer = list(list(enc.children())[-1].children())[:-1]
     enc.fcpart = nn.Sequential(*last_layer)
     return enc
+
 
 def get_ckpt_results(ckpt, lat_dim, train_data, test_data, plot=False, wfs=None, wfs_interest=None, title=None, enc_type=None, Lv=None, ks=None, fc=None, save_name=None):
     if enc_type is None or enc_type == 'encoder':
@@ -35,8 +38,8 @@ def get_ckpt_results(ckpt, lat_dim, train_data, test_data, plot=False, wfs=None,
         enc = MultiChanAttentionEnc1(out_size=lat_dim, proj_dim=5, fc_depth=fc_depth, dropout=0.1, expand_dim=16).load(ckpt)
         backbone = get_backbone(enc)
         
-    contr_reps_train = compute_reps_test(backbone, train_data)
-    contr_reps_test = compute_reps_test(backbone, test_data)
+    contr_reps_train = get_contr_representations(backbone, train_data)
+    contr_reps_test = get_contr_representations(backbone, test_data)
 
     if lat_dim > 2:
         # contr_reps_test_umap = learn_manifold_umap(contr_reps_test, 2) 

@@ -28,8 +28,6 @@ def main(args):
     main_worker(0, args)
     
 def main_worker(gpu, args):
-    # args.rank += gpu
-    
     if args.ddp:
         torch.distributed.init_process_group(
             backend='nccl', init_method=args.dist_url,
@@ -39,11 +37,16 @@ def main_worker(gpu, args):
     torch.backends.cudnn.benchmark = True
     # torch.backends.cudnn.deterministic = True
     
+    aug_p_dict = [0.4, 0.5, 0.7, 0.6, 0.5] if args.aug_p_dict is None else args.aug_p_dict
     num_extra_chans = args.num_extra_chans if args.multi_chan else 0
     
     dataset = ContrastiveLearningDataset(args.data, args.out_dim, multi_chan=args.multi_chan)
 
-    train_dataset = dataset.get_dataset(args.dataset_name, args.n_views, args.noise_scale, num_extra_chans, normalize=args.cell_type, detected_spikes=args.detected_spikes)
+    train_dataset = dataset.get_dataset(args.dataset_name,
+                                        args.n_views,
+                                        num_extra_chans,
+                                        detected_spikes=args.detected_spikes,
+                                        )
     print("ddp:", args.ddp)
     
     if args.ddp:
@@ -105,9 +108,7 @@ def main_worker(gpu, args):
     else:
         proj = None
     
-    # for n, p in model.named_parameters():
-    #     print(n, p.numel())
-    # print("number of encoder params: ", sum(p.numel() for p in self.backbone.parameters()))
+    print("number of encoder params: ", sum(p.numel() for p in model.parameters()))
     print("number of transfomer params: ", sum(p.numel() for n,p in model.named_parameters() if 'transformer' in n))
     print("number of fcpart params: ", sum(p.numel() for n,p in model.named_parameters() if ('lm_head' in n and 'proj' not in n)))
     print("number of Proj params: ", sum(p.numel() for n,p in model.named_parameters() if ('proj' in n)))
@@ -127,7 +128,7 @@ def main_worker(gpu, args):
                                                            last_epoch=-1)
 
     print("model and optimizer initialized!")
-        # automatically resume from checkpoint if it exists
+    # automatically resume from checkpoint if it exists
     if os.path.exists(os.path.join(args.checkpoint_dir, "checkpoint.pth")):
         print("loading from previous checkpoint: ", args.checkpoint_dir)
         ckpt = torch.load(os.path.join(args.checkpoint_dir, "checkpoint.pth"),
@@ -138,14 +139,13 @@ def main_worker(gpu, args):
 
     else:
         start_epoch = 0
-        
-    # It’s a no-op if the 'gpu_index' argument is a negative integer or None.
-    # with torch.cuda.device(args.gpu_index):
+    
     print("starting SimCLR..")
     
     simclr = SimCLR(model=model, proj=proj, optimizer=optimizer, scheduler=scheduler, gpu=gpu, 
                     sampler=sampler, args=args, start_epoch=start_epoch)
     simclr.train(train_loader, memory_loader, test_loader)
+
 
 def make_sh_and_submit(args):
     os.makedirs('./scripts/', exist_ok=True)
@@ -182,8 +182,7 @@ def make_sh_and_submit(args):
 
     os.system(f'sbatch ./scripts/{name}.sh')
 
-        
-    
+
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description='PyTorch SimCLR')
@@ -251,7 +250,6 @@ if __name__ == "__main__":
     parser.add_argument('--n_head', default=4, type=int)
     parser.add_argument('--n_embd', default=64, type=int)
     parser.add_argument('--is_causal', action='store_true') # default = False
-    # parser.add_argument('--block_size', default=2678, type=int) # this is the max sequence length
     parser.add_argument('--block_size', default=121, type=int) # this is the max sequence length
     
     parser.add_argument('--dropout', default=0.2, type=float)
@@ -260,6 +258,7 @@ if __name__ == "__main__":
     parser.add_argument('--online_head', action='store_true') # default = False
     parser.add_argument('--pos_enc', default ='seq_11times', type=str)    
     parser.add_argument('--no_collide', action='store_true') # default = False
+    parser.add_argument('--aug_p_dict', default=None, type=list) # prob of applying each aug in pipeline
     parser.add_argument('--num_extra_chans', default=0, type=int)
     parser.add_argument('--add_train', action='store_true') # default = False
     parser.add_argument('--use_chan_pos', action='store_true') # default = False

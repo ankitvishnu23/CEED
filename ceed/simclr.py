@@ -10,13 +10,12 @@ import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.cuda.amp import GradScaler, autocast
 from utils.utils import (
-    save_checkpoint, knn_monitor, gmm_monitor
+    save_checkpoint, knn_monitor, gmm_monitor, save_reps
 )      
 # from utils.ddp_utils import gather_from_all
 import tensorboard_logger as tb_logger
 torch.manual_seed(0)
 import time
-from utils.load_models import save_reps
 from data_aug.wf_data_augs import TorchSmartNoise
 
 class SimCLR(object):
@@ -25,30 +24,27 @@ class SimCLR(object):
         self.args = kwargs['args']
         self.gpu = kwargs['gpu']
         self.sampler = kwargs['sampler']
-        # self.model = kwargs['model'].double().cuda(self.args.device)
-        # self.model = kwargs['model'].double().to(self.gpu)
         
         self.model =  kwargs['model']
-        # self.model = kwargs['model'].cuda(self.args.device)
         self.proj = kwargs['proj'].cuda(kwargs['gpu']) if kwargs['proj'] is not None else None 
         if self.proj and self.args.ddp:
             raise "proj needs to be wrapped in ddp"
         self.optimizer = kwargs['optimizer']
         self.scheduler = kwargs['scheduler']
-        # self.writer = SummaryWriter('./logs/'+self.args.exp)
         if self.args.rank == 0 or not self.args.ddp:
-            # self.writer = SummaryWriter(os.path.join(self.args.log_dir,self.args.exp))
             self.logger = tb_logger.Logger(logdir=self.args.log_dir, flush_secs=2)
         self.multichan = self.args.multi_chan
         if self.args.rank == 0 or not self.args.ddp:
             logging.basicConfig(filename=os.path.join(self.args.log_dir, 'training.log'), level=logging.DEBUG)
         self.criterion = torch.nn.CrossEntropyLoss().cuda(self.gpu)
         self.start_epoch = kwargs['start_epoch']
-        self.noise_transform = TorchSmartNoise(self.args.data, noise_scale=self.args.noise_scale, 
-                                                                    normalize=self.args.cell_type, gpu=self.gpu)
+        self.noise_transform = TorchSmartNoise(self.args.data,
+                                               noise_scale=self.args.noise_scale,
+                                               normalize=self.args.cell_type, 
+                                               gpu=self.gpu,
+                                               p=args.aug_p_dict[-1])
 
     def info_nce_loss(self, features):
-
         # if self.args.ddp:
         #     features = gather_from_all(features)
         features = torch.squeeze(features)
@@ -57,29 +53,22 @@ class SimCLR(object):
 
         labels = torch.cat([torch.arange(batch_dim) for i in range(self.args.n_views)], dim=0)
         labels = (labels.unsqueeze(0) == labels.unsqueeze(1)).float()
-        # labels = labels.to(self.gpu)
         labels = labels.cuda()
 
         similarity_matrix = torch.matmul(features, features.T)
-        # assert similarity_matrix.shape == (
-        #     self.args.n_views * self.args.batch_size, self.args.n_views * self.args.batch_size)
-        # assert similarity_matrix.shape == labels.shape
 
         # discard the main diagonal from both: labels and similarities matrix
-        # mask = torch.eye(labels.shape[0], dtype=torch.bool).to(self.gpu)
         mask = torch.eye(labels.shape[0], dtype=torch.bool).cuda(non_blocking=True)
         labels = labels[~mask].view(labels.shape[0], -1)
         similarity_matrix = similarity_matrix[~mask].view(similarity_matrix.shape[0], -1)
-        # assert similarity_matrix.shape == labels.shape
 
         # select and combine multiple positives
         positives = similarity_matrix[labels.bool()].view(labels.shape[0], -1)
 
-        # select only the negatives the negatives
+        # select only the negatives
         negatives = similarity_matrix[~labels.bool()].view(similarity_matrix.shape[0], -1)
 
         logits = torch.cat([positives, negatives], dim=1)
-        # labels = torch.zeros(logits.shape[0], dtype=torch.long).to(self.gpu)
         labels = torch.zeros(logits.shape[0], dtype=torch.long).cuda()
 
         logits = logits / self.args.temperature
@@ -89,17 +78,11 @@ class SimCLR(object):
 
         scaler = GradScaler(enabled=self.args.fp16)
 
-        # save config file
-        # save_config_file('./runs-args', self.args)
-
         n_iter = 0
         if self.args.rank == 0 or not self.args.ddp:
             logging.info(f"Start SimCLR training for {self.args.epochs} epochs.")
             logging.info(f"Training with gpu: {not self.args.disable_cuda}.")
             print(f"Start SimCLR training for {self.args.epochs} epochs, starting at {self.start_epoch}.")
-
-        # pca_score = knn_pca_score(self.args.out_dim, self.args.data)
-        pca_score = 0
 
         for epoch_counter in range(self.start_epoch, self.args.epochs):
             if self.args.add_train:
@@ -108,9 +91,7 @@ class SimCLR(object):
             if self.args.ddp:
                 self.sampler.set_epoch(epoch_counter)
             print('Epoch {}'.format(epoch_counter))
-            # time4 = time.time()
             for i, (wf, chan_nums, lab) in enumerate(train_loader):
-                # print(f"batch {i}")
                 chan_pos = None
                 if self.args.use_chan_pos:
                     wf, chan_pos = wf
@@ -119,9 +100,6 @@ class SimCLR(object):
                 chan_nums = np.concatenate(chan_nums, axis=0)
                 lab = torch.cat(lab, dim=0).long().cuda(self.gpu,non_blocking=True)
                 
-                # wf = torch.squeeze(wf)
-                # if not self.multichan:
-                #     wf = torch.unsqueeze(wf, dim=1)
                 wf = wf.cuda(self.gpu)
                 wf = torch.stack([self.noise_transform([wf[i], chan_nums[i]]) for i in range(wf.shape[0])]) #smart_noise on GPU
 
@@ -132,9 +110,6 @@ class SimCLR(object):
                     else:
                         wf = wf.view(-1, (self.args.num_extra_chans*2+1)*121)
                         wf = torch.unsqueeze(wf, dim=-1)
-                # wf = wf.float().cuda(self.args.device)
-                # time1 = time.time()
-                # print("time for loading batch:", time1 - time4)
                 
                 with autocast(enabled=self.args.fp16):
                     if self.args.online_head:
@@ -147,15 +122,10 @@ class SimCLR(object):
                         cls_loss = 0.
                         online_acc = -1
                     if self.proj is not None:
-                        raise "projector should be defined in model! "
                         features = self.proj(features)
-                    # time2 = time.time()
-                    # print("time for fwd:", time2-time1)
                     
                     logits, labels = self.info_nce_loss(features)
                     loss = self.criterion(logits, labels) + cls_loss
-                    # time3 = time.time()
-                    # print("time for backward:", time3-time2)
                     
                 self.optimizer.zero_grad()
 
@@ -163,17 +133,6 @@ class SimCLR(object):
 
                 scaler.step(self.optimizer)
                 scaler.update()
-                
-                # time4 = time.time()
-                # print("time for optimizer step:", time4-time3)
-                
-                # for i, param in enumerate(self.model.parameters()):
-                #     if i == 0:
-                #         print(param.dtype)
-                # knn_score = knn_monitor(net=self.model, memory_data_loader=memory_loader, test_data_loader=test_loader, device='cuda',k=200, hide_progress=True)
-                # if n_iter % 10 == 0:
-                
-                # if n_iter % self.args.log_every_n_steps == 0:
                 
                 n_iter += 1
 
@@ -183,8 +142,6 @@ class SimCLR(object):
             
             if epoch_counter % self.args.eval_knn_every_n_epochs == 0 and epoch_counter != 0 and not self.args.no_knn:
                 if self.args.rank == 0 or not self.args.ddp:
-                    # knn_score = validation(self.model, self.args.out_dim, self.args.data, self.gpu)
-                    # print(f"loss: {loss}, knn_acc:{knn_score}")
                     knn_score = knn_monitor(net=self.model, memory_data_loader=memory_loader, test_data_loader=test_loader, device='cuda',k=200, hide_progress=True, args=self.args)
                     gmm_score = gmm_monitor(net=self.model, memory_data_loader=memory_loader, test_data_loader=test_loader, device='cuda', epoch_num=epoch_counter, hide_progress=True, args=self.args)
                     print(f"Epoch {epoch_counter}, my knn_acc:{knn_score}")
@@ -195,12 +152,8 @@ class SimCLR(object):
             if self.args.rank == 0 or not self.args.ddp:
                 logging.debug(f"Epoch: {epoch_counter}\tLoss: {loss}")
                 self.logger.log_value('loss', loss, epoch_counter)
-                # self.writer.add_scalar('loss', loss, epoch_counter)
-                # self.writer.add_scalar('pca_knn_score', pca_score, global_step=n_iter)
-                # self.writer.add_scalar('knn_score', knn_score, epoch_counter)
                 
                 curr_lr = self.optimizer.param_groups[0]['lr'] if self.scheduler == None else self.scheduler.get_lr()[0]
-                # self.writer.add_scalar('learning_rate', curr_lr, epoch_counter)
                 self.logger.log_value('learning_rate', curr_lr, epoch_counter)
                 if online_acc != -1:
                     self.logger.log_value('online_acc', online_acc, epoch_counter)
@@ -230,9 +183,9 @@ class SimCLR(object):
                 'state_dict': self.model.state_dict(),
                 'optimizer': self.optimizer.state_dict(),
             }, is_best=False, filename=os.path.join(self.args.checkpoint_dir, 'final.pth'))
-            # }, is_best=False, filename=os.path.join('./runs', checkpoint_name))
             logging.info(f"Model checkpoint and metadata has been saved at {self.args.checkpoint_dir}.")
         
+            # save out the representations of the test and memory loaders using the final checkpoint
             save_reps(self.model, test_loader, os.path.join(self.args.checkpoint_dir, 'final.pth'), split='test', multi_chan=False, rep_after_proj=True, use_chan_pos=False, suffix='')
             save_reps(self.model, memory_loader, os.path.join(self.args.checkpoint_dir, 'final.pth'), split='test', multi_chan=False, rep_after_proj=True, use_chan_pos=False, suffix='')
             

@@ -7,16 +7,16 @@ from torchvision.transforms import transforms
 from torchvision import transforms, datasets
 from torch.utils.data import Dataset
 from data_aug.view_generator import ContrastiveLearningViewGenerator, LabelViewGenerator
-# from exceptions.exceptions import InvalidDatasetSelection
 from data_aug.wf_data_augs import AmpJitter, Jitter, Collide, SmartNoise, ToWfTensor, PCA_Reproj, Crop, TorchToWfTensor
 from typing import Any, Callable, Optional, Tuple
 
+
+# Waveform Dataset used for single channel waveforms
 class WFDataset(Dataset):
     train_set_fn = "spikes_train.npy"
     spike_mcs_fn = "channel_num_train.npy"
     chan_coords_fn = "channel_spike_locs_train.npy"
     targets_fn = "labels_train.npy"
-    # masks_fn = "masks_train.npy"
 
     def __init__(
         self,
@@ -39,6 +39,7 @@ class WFDataset(Dataset):
         self.transform = transform
         self.detected_spikes = detected_spikes
 
+        # If we do not have label information / if dataset is created without labels
         if detected_spikes:
             self.targets = None
             self.target_transform = None
@@ -47,8 +48,6 @@ class WFDataset(Dataset):
             self.target_transform = target_transform
         self.channel_locs = np.load(os.path.join(root, self.chan_coords_fn))
         self.use_chan_pos = use_chan_pos
-        # self.masks = np.load(os.path.join(root, self.masks_fn))
-
 
     def __getitem__(self, index: int) -> Any :
         """
@@ -78,11 +77,11 @@ class WFDataset(Dataset):
         
         return wf, y
 
-
     def __len__(self) -> int:
         return len(self.data)
 
 
+# Waveform Dataset used for multi channel waveforms
 class WF_MultiChan_Dataset(Dataset):
     train_set_fn = "spikes_train.npy"
     spike_mcs_fn = "channel_num_train.npy"
@@ -110,6 +109,7 @@ class WF_MultiChan_Dataset(Dataset):
         self.transform = transform
         self.detected_spikes = detected_spikes
 
+        # If we do not have label information / if dataset is created without labels
         if detected_spikes:
             self.targets = None
             self.target_transform = None
@@ -118,8 +118,6 @@ class WF_MultiChan_Dataset(Dataset):
             self.target_transform = target_transform
         self.channel_locs = np.load(os.path.join(root, self.chan_coords_fn))
         self.use_chan_pos = use_chan_pos
-        print(len(self.chan_nums))
-        print(self.chan_nums.shape)
 
     def __getitem__(self, index: int) -> Any :
         """
@@ -136,9 +134,6 @@ class WF_MultiChan_Dataset(Dataset):
         chan_nums = self.chan_nums[index]
         chan_loc = self.channel_locs[index].astype('float32')
 
-        # doing this so that it is a tensor
-        # wf = torch.from_numpy(wf)
-
         if self.transform is not None and self.use_chan_pos:
             wf, chan_loc = self.transform([wf, chan_nums, chan_loc])
         elif self.transform is not None:
@@ -154,11 +149,11 @@ class WF_MultiChan_Dataset(Dataset):
             
         return wf, chan_nums, y
 
-
     def __len__(self) -> int:
         return len(self.data)
 
 
+# Dataset with labels for validation performance during training
 class WFDataset_lab(Dataset):
     train_set_fn = "spikes_train.npy"
     train_targets_fn = "labels_train.npy"
@@ -239,6 +234,7 @@ class WFDataset_lab(Dataset):
     def __len__(self) -> int:
         return len(self.data)
 
+
 class ContrastiveLearningDataset:
     def __init__(self, root_folder, lat_dim, multi_chan, use_chan_pos=False):
         self.root_folder = root_folder
@@ -247,15 +243,13 @@ class ContrastiveLearningDataset:
         self.use_chan_pos = use_chan_pos
 
     @staticmethod
-    def get_wf_pipeline_transform(self, temp_cov_fn, spatial_cov_fn, noise_scale, num_extra_chans, normalize=False, p_dict=(0.5, 0.4, 0.7, 0.6)):
-        temporal_cov = np.load(os.path.join(self.root_folder, temp_cov_fn))
-        spatial_cov = np.load(os.path.join(self.root_folder, spatial_cov_fn))
+    def get_wf_pipeline_transform(self, num_extra_chans, aug_p_dict=[0.4, 0.5, 0.7, 0.6]):
         """Return a set of data augmentation transformations on waveforms."""
         data_transforms = transforms.Compose([
-                                            transforms.RandomApply([Collide(self.root_folder, multi_chan=self.multi_chan)], p=0.4),
-                                            Crop(prob=p_crop, num_extra_chans=num_extra_chans),
-                                            transforms.RandomApply([AmpJitter()], p=0.7),
-                                            transforms.RandomApply([Jitter()], p=0.6),
+                                            transforms.RandomApply([Collide(self.root_folder, multi_chan=self.multi_chan)], p=aug_p_dict[0]),
+                                            Crop(prob=aug_p_dict[1], num_extra_chans=num_extra_chans),
+                                            transforms.RandomApply([AmpJitter()], p=aug_p_dict[2]),
+                                            transforms.RandomApply([Jitter()], p=aug_p_dict[3]),
                                             # smart noise has been moved to the training loop (for GPU)
                                             TorchToWfTensor()])
         
@@ -268,26 +262,24 @@ class ContrastiveLearningDataset:
         
         return data_transforms
 
-    def get_dataset(self, name, n_views, noise_scale=1.0, num_extra_chans=0, normalize=False, p_crop=0.5, detected_spikes=False):
-        temp_cov_fn = 'temporal_cov_example.npy'    
-        spatial_cov_fn = 'spatial_cov_example.npy'
+    def get_dataset(self, name, n_views, num_extra_chans=0, detected_spikes=False, aug_p_dict=[0.4, 0.5, 0.7, 0.6]):
         if self.multi_chan:
             name = name + '_multichan'
         valid_datasets = {'wfs': lambda: WFDataset(self.root_folder,
                                                               transform=ContrastiveLearningViewGenerator(
-                                                                  self.get_wf_pipeline_transform(self, temp_cov_fn,
-                                                                  spatial_cov_fn,
-                                                                #   noise_scale), self.get_pca_transform(self),
-                                                                  noise_scale, 0, normalize), None,
+                                                                  self.get_wf_pipeline_transform(self, 
+                                                                                                 num_extra_chans=0, 
+                                                                                                 aug_p_dict=aug_p_dict), 
+                                                                  None, 
                                                                   n_views),
                                                                   target_transform=LabelViewGenerator(),
                                                                   detected_spikes=detected_spikes),
                           'wfs_multichan': lambda: WF_MultiChan_Dataset(self.root_folder, use_chan_pos=self.use_chan_pos,
                                                               transform=ContrastiveLearningViewGenerator(
-                                                                  self.get_wf_pipeline_transform(self, temp_cov_fn,
-                                                                  spatial_cov_fn,
-                                                                #   noise_scale), self.get_pca_transform(self),
-                                                                  noise_scale, num_extra_chans, p_crop=p_crop), None,
+                                                                  self.get_wf_pipeline_transform(self, 
+                                                                                                 num_extra_chans=num_extra_chans, 
+                                                                                                 aug_p_dict=aug_p_dict), 
+                                                                  None, 
                                                                   n_views),
                                                                   target_transform=LabelViewGenerator(),
                                                                   detected_spikes=detected_spikes)}

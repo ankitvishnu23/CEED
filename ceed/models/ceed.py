@@ -83,6 +83,7 @@ class CEED(object):
         lr: float = 0.001,
         batch_size: int = 256,
         optimizer: str = 'adam',
+        aug_p_dict: list = [0.4, 0.5, 0.7, 0.6, 0.5],
         cell_type: bool = False,
         save_metrics: bool = False,
         use_chan_pos: bool = False,
@@ -109,6 +110,9 @@ class CEED(object):
             The number of samples per batch to contrastively train CEED (higher bs can improve performance but requires more GPU memory).
         optimizer : str
             'adam' or 'sgd' optimizer to use for training.
+        aug_p_dict : list
+            probability of using augmentation in stochastic aug pipeline. 
+            order of aug probabilities is [collision, crop, amplitude jitter, temporal jitter, smart noise]
         cell_type : bool
             Whether to normalize data for use in training a CEED cell type classification model.
         save_metrics : bool
@@ -127,7 +131,10 @@ class CEED(object):
 
         dataset = ContrastiveLearningDataset(data_dir, self.out_dim, multi_chan=self.multi_chan)
 
-        train_dataset = dataset.get_dataset('wfs', 2, 1.0, self.num_extra_chans, normalize=cell_type, detected_spikes=False)
+        train_dataset = dataset.get_dataset(name='wfs', 
+                                            n_views=2, 
+                                            num_extra_chans=self.num_extra_chans,
+                                            detected_spikes=False)
         train_loader = torch.utils.data.DataLoader(
             train_dataset, batch_size=batch_size, shuffle=True,
             num_workers=8, pin_memory=True, drop_last=True)
@@ -155,7 +162,6 @@ class CEED(object):
             memory_loader = None
             test_loader = None
         
-
         print("number of transfomer params: ", sum(p.numel() for n,p in self.model.named_parameters() if 'transformer' in n))
         print("number of fcpart params: ", sum(p.numel() for n,p in self.model.named_parameters() if ('lm_head' in n and 'proj' not in n)))
         print("number of Proj params: ", sum(p.numel() for n,p in self.model.named_parameters() if ('proj' in n)))
@@ -190,7 +196,7 @@ class CEED(object):
                                no_knn=(not save_metrics), checkpoint_dir=checkpoint_dir, 
                                num_extra_chans=self.num_extra_chans, 
                                disable_cuda=False, temperature=0.07, arch=self.arch,
-                               noise_scale=1.0, cell_type=cell_type, gpu=gpu)
+                               noise_scale=1.0, cell_type=cell_type, gpu=gpu, aug_p_dict=aug_p_dict)
         
         print("starting training...")    
         simclr = SimCLR(model=self.model, proj=None, optimizer=optimizer, scheduler=scheduler, gpu=gpu, 
