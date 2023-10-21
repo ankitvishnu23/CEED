@@ -20,9 +20,8 @@ from utils.ddp_utils import gather_from_all
 
 from data_aug.contrastive_learning_dataset import ContrastiveLearningDataset, WFDataset_lab
 from ceed.models.model_GPT import GPTConfig, Multi_GPT, Projector
-from utils.utils import knn_monitor, gmm_monitor
+from utils.utils import knn_monitor, gmm_monitor, save_reps
 from data_aug.wf_data_augs import Crop
-from utils.load_models import save_reps
 
 # def main():
 #     args = parser.parse_args()

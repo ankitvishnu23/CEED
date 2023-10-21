@@ -42,7 +42,7 @@ class SimCLR(object):
                                                noise_scale=self.args.noise_scale,
                                                normalize=self.args.cell_type, 
                                                gpu=self.gpu,
-                                               p=args.aug_p_dict[-1])
+                                               p=self.args.aug_p_dict[-1])
 
     def info_nce_loss(self, features):
         # if self.args.ddp:
@@ -101,7 +101,7 @@ class SimCLR(object):
                 lab = torch.cat(lab, dim=0).long().cuda(self.gpu,non_blocking=True)
                 
                 wf = wf.cuda(self.gpu)
-                wf = torch.stack([self.noise_transform([wf[i], chan_nums[i]]) for i in range(wf.shape[0])]) #smart_noise on GPU
+                wf = self.noise_transform([wf, chan_nums]) #smart_noise on GPU
 
                 if self.args.use_gpt:
                     if not self.args.multi_chan:

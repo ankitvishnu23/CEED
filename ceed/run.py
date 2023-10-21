@@ -11,7 +11,7 @@ import torch.backends.cudnn as cudnn
 from torchvision import models
 from data_aug.contrastive_learning_dataset import ContrastiveLearningDataset, WFDataset_lab
 from data_aug.wf_data_augs import Crop
-from ceed.models.model_simclr import ModelSimCLR, Projector, Projector2
+from ceed.models.model_simclr import ModelSimCLR, Projector
 from ceed.simclr import SimCLR
 from ceed.models.model_GPT import GPTConfig, Single_GPT
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -37,7 +37,7 @@ def main_worker(gpu, args):
     torch.backends.cudnn.benchmark = True
     # torch.backends.cudnn.deterministic = True
     
-    aug_p_dict = [0.4, 0.5, 0.7, 0.6, 0.5] if args.aug_p_dict is None else args.aug_p_dict
+    args.aug_p_dict = [0.4, 0.5, 0.7, 0.6, 0.5] if args.aug_p_dict is None else args.aug_p_dict
     num_extra_chans = args.num_extra_chans if args.multi_chan else 0
     
     dataset = ContrastiveLearningDataset(args.data, args.out_dim, multi_chan=args.multi_chan)
@@ -46,6 +46,7 @@ def main_worker(gpu, args):
                                         args.n_views,
                                         num_extra_chans,
                                         detected_spikes=args.detected_spikes,
+                                        aug_p_dict=args.aug_p_dict,
                                         )
     print("ddp:", args.ddp)
     
@@ -99,10 +100,8 @@ def main_worker(gpu, args):
             fc_depth=args.fc_depth, expand_dim=args.expand_dim, multichan=args.multi_chan, input_size=(2*num_extra_chans+1)*121).cuda(gpu)
 
     if not args.no_proj:
-        if args.arch == 'custom_encoder':
+        if args.arch == 'conv_encoder':
             proj = Projector(rep_dim=args.out_dim, proj_dim=args.proj_dim)
-        elif args.arch == 'custom_encoder2':
-            proj = Projector2(rep_dim=args.out_dim, proj_dim=args.proj_dim)
         elif args.arch == 'fc_encoder':
             proj = Projector(rep_dim=args.out_dim, proj_dim=args.proj_dim)
     else:

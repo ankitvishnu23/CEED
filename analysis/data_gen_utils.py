@@ -46,7 +46,11 @@ Functions taken from YASS: Yet Another Spike Sorter -  https://github.com/panins
 """
 
 
-def kill_signal(recordings, threshold, window_size):
+def kill_signal(
+        recordings, 
+        threshold, 
+        window_size
+):
     """
     Thresholds recordings, values above 'threshold' are considered signal
     (set to 0), a window of size 'window_size' is drawn around the signal

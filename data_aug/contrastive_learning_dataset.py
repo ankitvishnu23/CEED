@@ -33,7 +33,6 @@ class WFDataset(Dataset):
 
         # now load the numpy array
         self.data = np.load(os.path.join(root, self.train_set_fn))
-        print(self.data.shape)
         self.root = root
         self.max_chans = np.load(os.path.join(root, self.spike_mcs_fn))
         self.transform = transform
@@ -103,7 +102,6 @@ class WF_MultiChan_Dataset(Dataset):
 
         # now load the numpy array
         self.data = np.load(os.path.join(root, self.train_set_fn))
-        print(self.data.shape)
         self.root = root
         self.chan_nums = np.load(os.path.join(root, self.spike_mcs_fn))
         self.transform = transform
@@ -201,7 +199,6 @@ class WFDataset_lab(Dataset):
         # self.data: Any = []
 
         # now load the numpy array
-        print(self.data.shape)
         self.root = root
         self.transform = transform
         self.use_chan_pos = use_chan_pos
@@ -219,8 +216,6 @@ class WFDataset_lab(Dataset):
         chan_nums = self.chan_nums[index]
         chan_loc = self.channel_locs[index].astype('float32')
 
-        # doing this so that it is a tensor
-        # wf = torch.from_numpy(wf)
         if self.transform is not None and self.use_chan_pos:
             wf, chan_loc = self.transform([wf, chan_nums, chan_loc])
         elif self.transform is not None:
@@ -246,7 +241,7 @@ class ContrastiveLearningDataset:
     def get_wf_pipeline_transform(self, num_extra_chans, aug_p_dict=[0.4, 0.5, 0.7, 0.6]):
         """Return a set of data augmentation transformations on waveforms."""
         data_transforms = transforms.Compose([
-                                            transforms.RandomApply([Collide(self.root_folder, multi_chan=self.multi_chan)], p=aug_p_dict[0]),
+                                            transforms.RandomApply([Collide(self.root_folder)], p=aug_p_dict[0]),
                                             Crop(prob=aug_p_dict[1], num_extra_chans=num_extra_chans),
                                             transforms.RandomApply([AmpJitter()], p=aug_p_dict[2]),
                                             transforms.RandomApply([Jitter()], p=aug_p_dict[3]),
