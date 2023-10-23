@@ -259,7 +259,7 @@ if __name__ == "__main__":
     parser.add_argument('--no_collide', action='store_true') # default = False
     parser.add_argument('--aug_p_dict', default=None, type=list) # prob of applying each aug in pipeline
     parser.add_argument('--num_extra_chans', default=0, type=int)
-    parser.add_argument('--add_train', action='store_true') # default = False
+    parser.add_argument('--add_train', default=True) # default = True
     parser.add_argument('--use_chan_pos', action='store_true') # default = False
     parser.add_argument('--cell_type', action='store_true') # default = False
     parser.add_argument('--detected_spikes', action='store_true') # default = False

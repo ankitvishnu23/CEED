@@ -279,12 +279,16 @@ class Collide(object):
         if len(wf.shape) == 1:
             wf = np.expand_dims(wf, axis=0)
         
+        _, n_samps = wf.shape
+        low_shift = math.ceil(n_samps / 25)
+        high_shift = n_samps // 2
+        
         temp_idx = np.random.randint(0, len(self.spikes))
         temp_sel = self.spikes[temp_idx]
         temp_sel = np.expand_dims(temp_sel, axis=0) if len(temp_sel.shape) == 1 else temp_sel
         
         scale = np.random.uniform(0.2, 1)
-        shift = (2* np.random.binomial(1, 0.5)-1) * np.random.randint(5, 60)
+        shift = (2* np.random.binomial(1, 0.5)-1) * np.random.randint(low_shift, high_shift)
 
         temp_sel = temp_sel * scale
         temp_sel = self.shift_chans(temp_sel, shift)

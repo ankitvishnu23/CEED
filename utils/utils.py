@@ -103,6 +103,7 @@ def get_torch_reps(net, data_loader, device, args):
                 data, chan_pos = data
             else:
                 chan_pos = None
+            data = data.float()
                 
             if args.use_gpt:
                 data = data.view(-1, (args.num_extra_chans*2+1)*121) if args.multi_chan else torch.squeeze(data, dim=1)
@@ -255,6 +256,7 @@ def knn_monitor(net, memory_data_loader, test_data_loader, device='cuda', k=200,
                     data, chan_pos = data
                 data = data.view(-1, int(args.num_extra_chans*2+1)*121)
                 data = torch.unsqueeze(data, dim=-1)
+            data = data.float()
             
             if args.use_chan_pos:
                 feature = net(data.to(device=device, non_blocking=True), chan_pos=chan_pos.to(device=device, non_blocking=True))
@@ -282,7 +284,8 @@ def knn_monitor(net, memory_data_loader, test_data_loader, device='cuda', k=200,
                     chan_pos = None
                 data = data.view(-1, int(args.num_extra_chans*2+1)*121)
                 data = torch.unsqueeze(data, dim=-1)
-                
+            data = data.float()
+
             if args.use_chan_pos:
                 feature = net(data.to(device=device, non_blocking=True), chan_pos=chan_pos.to(device=device, non_blocking=True))
             else:
@@ -312,6 +315,7 @@ def save_reps(model, loader, ckpt_path, split='train', multi_chan=False,rep_afte
 
                 data = data.view(-1, 11*121)
                 data = torch.unsqueeze(data, dim=-1)
+            data = data.float()
             
             if use_chan_pos:
                 feature = model(data.cuda(non_blocking=True), chan_pos=chan_pos.cuda(non_blocking=True))
