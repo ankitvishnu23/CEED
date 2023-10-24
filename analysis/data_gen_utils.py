@@ -18,6 +18,7 @@ import torch
 from pathlib import Path
 from tqdm.auto import trange
 import shutil
+import spikeinterface.full as si
 
 try:
     import brainbox.io.one as bbone
@@ -36,6 +37,7 @@ try:
     from spike_psvae.waveform_utils import make_contiguous_channel_index
     from spike_psvae import snr_templates, spike_train_utils
     from spike_psvae.spikeio import read_waveforms
+    from dartsort.templates.get_templates import get_templates
 except ImportError:
     print("Failed to import spike-psvae/dartsort functions")
 
@@ -46,11 +48,7 @@ Functions taken from YASS: Yet Another Spike Sorter -  https://github.com/panins
 """
 
 
-def kill_signal(
-        recordings, 
-        threshold, 
-        window_size
-):
+def kill_signal(recordings, threshold, window_size):
     """
     Thresholds recordings, values above 'threshold' are considered signal
     (set to 0), a window of size 'window_size' is drawn around the signal
@@ -256,7 +254,7 @@ def search_noise_snippets(
             count += 1
             trial = 0
 
-            print("Found %i/%i...", count, sample_size)
+            #print("Found %i/%i...", count, sample_size)
 
         trial += 1
 
@@ -436,28 +434,31 @@ def save_sim_covs(rec_path, save_path, spike_length_samples=121):
         norm_chan_recording, spike_length_samples, 50
     )
 
-    np.save(os.path.join(save_path, "spatial_cov_example.npy"), spatial_cov)
-    np.save(os.path.join(save_path, "temporal_cov_example.npy"), temporal_cov)
+    np.save(os.path.join(save_path, "spatial_cov.npy"), spatial_cov)
+    np.save(os.path.join(save_path, "temporal_cov.npy"), temporal_cov)
 
 
-def save_real_covs(rec_path, save_path, spike_length_samples=121, window_size=50, time_samples=3000000):
+def save_real_covs(rec, save_path, spike_length_samples=121, window_size=50, time_samples=300000):
     """Create and save temporal and spatial covariance matrices for real data.
     Parameters
     ----------
-    rec_path: str
-        absolute path location of the binary file that contains channel recordings
+    rec: BinaryRecordingExtractor
+        recording extractor for the IBL binary to be extracted
     save_path: str
         absolute path location to store covariance matrices
     spike_length_samples: int
         number of samples for each waveform
+    window_size: int
+        window size (in samples) for estimating temporal cov
+    time_samples: int
+templates_sess2        number of samples to read in from the recording to estimate covs
     """
-    sr = spikeglx.Reader(rec_path)
-    rec = sr.read(nsel=slice(0, time_samples))[0][:, :-1]
+    num_frames = rec.get_num_frames()
+    snippet = rec.get_traces(start_frame=0, end_frame=min(num_frames,time_samples))
+    spatial_cov, temporal_cov = noise_whitener(snippet, spike_length_samples, window_size)
 
-    spatial_cov, temporal_cov = noise_whitener(rec, spike_length_samples, window_size)
-
-    np.save(os.path.join(save_path, "spatial_cov_example.npy"), spatial_cov)
-    np.save(os.path.join(save_path, "temporal_cov_example.npy"), temporal_cov)
+    np.save(os.path.join(save_path, "spatial_cov.npy"), spatial_cov)
+    np.save(os.path.join(save_path, "temporal_cov.npy"), temporal_cov)
 
 
 def download_IBL(pid, save_folder, t_window=[0, 500], overwrite=True):
@@ -482,96 +483,60 @@ def download_IBL(pid, save_folder, t_window=[0, 500], overwrite=True):
     one = ONE()
     eid, probe = one.pid2eid(pid)
     band = "ap"  # either 'ap' or 'lf'
-
     # Use IBL streamer to download the data
-    sr = Streamer(pid=pid, one=one, remove_cached=False, typ=band)
+    sr = Streamer(pid=pid, one=one, remove_cached=overwrite, typ=band)
     sr._download_raw_partial(first_chunk=t_window[0], last_chunk=t_window[1] - 1)
-    print(sr.one.load_dataset(sr.eid, f"*.{band}.meta", collection=f"*{sr.pname}"))
-
     sr.file_bin = sr.target_dir / "_spikeglx_ephysData_g0_t0.imec0.ap.stream.cbin"
-
+    binary = Path(sr.file_bin)
     folder = Path(save_folder)
+    standardized_file = folder / f"{binary.stem}.normalized.bin"
+    metadata_file = standardized_file.parent.joinpath(
+                f"{sr.file_meta_data.stem}.normalized.meta"
+            )    
     if not folder.exists():
-        # If it doesn't exist, create it
-        folder.mkdir(parents=True, exist_ok=True)
-        print(f"Folder '{folder}' created.")
+        # If it doesn't exist, create it later
+        pass
     else:
         if overwrite:
             shutil.rmtree(folder)
-            folder.mkdir(parents=True, exist_ok=True)
             print(f"Folder '{folder}' overwritten.")
         else:
             print(
                 str(folder)
-                + " already exists and overwrite=False. skipping destriping."
+                + " already exists and overwrite=False. skipping preprocessing."
             )
-
-    binary = Path(sr.file_bin)
-    # run destriping
-    sr = spikeglx.Reader(binary)
-    h = sr.geometry
-    standardized_file = folder / f"{binary.stem}.normalized.bin"
-    metadata_file = standardized_file.parent.joinpath(
-        f"{sr.file_meta_data.stem}.normalized.meta"
+            rec = si.read_binary_folder(save_folder)
+            return rec, metadata_file
+            print("done preprocessing")
+    rec = si.read_cbin_ibl(sr.target_dir)
+    # preprocessing (mimic IBL's pipeline with spikeinterface)
+    print("preprocessing (mimic IBL's pipeline with spikeinterface)")
+    rec = si.highpass_filter(rec)
+    rec = si.phase_shift(rec)
+    bad_channel_ids, channel_labels = si.detect_bad_channels(rec)
+    rec = si.interpolate_bad_channels(rec, bad_channel_ids)
+    rec = si.highpass_spatial_filter(rec)
+    rec = si.zscore(rec, num_chunks_per_segment=50, mode="mean+std")
+    
+    rec = rec.save(folder=save_folder, n_jobs=5, chunk_duration="1s")
+    print("done preprocessing")
+    # also copy the companion meta-data file
+    shutil.copy(
+        sr.file_meta_data,
+        metadata_file,
     )
-    if not standardized_file.exists():
-        print("running destriping")
-        batch_size_secs = 1
-        assert sr.rl > 80, "t_window must be larger 80 for computing rms"
-        batch_intervals_secs = 50
-        # scans the file at constant interval, with a demi batch starting offset
-        nbatches = int(np.floor((sr.rl - batch_size_secs) / batch_intervals_secs - 0.5))
-        wrots = np.zeros((nbatches, sr.nc - sr.nsync, sr.nc - sr.nsync))
-        for ibatch in trange(nbatches, desc="destripe batches"):
-            ifirst = int(
-                (ibatch + 0.5) * batch_intervals_secs * sr.fs + batch_intervals_secs
-            )
-            ilast = ifirst + int(batch_size_secs * sr.fs)
-            sample = voltage.destripe(
-                sr[ifirst:ilast, : -sr.nsync].T, fs=sr.fs, neuropixel_version=1
-            )
-            np.fill_diagonal(
-                wrots[ibatch, :, :],
-                1 / rms(sample) * sr.sample2volts[: -sr.nsync],
-            )
-
-        wrot = np.median(wrots, axis=0)
-        voltage.decompress_destripe_cbin(
-            sr.file_bin,
-            h=h,
-            wrot=wrot,
-            output_file=standardized_file,
-            dtype=np.float32,
-            nc_out=sr.nc - sr.nsync,
-        )
-
-        shutil.copy(
-            sr.file_meta_data,
-            metadata_file,
-        )
-
-        print("done with destriping")
-    else:
-        print(
-            "destriped file for this recording already exists! \
-              location is {}. aborting destriping...".format(
-                standardized_file
-            )
-        )
-
-    return standardized_file, metadata_file
-
+    return rec, metadata_file
 
 def extract_IBL(
-    bin_fp, meta_fp, pid, t_window=[0, 1100], use_labels=True, sampling_frequency=30_000
+    rec, meta_fp, pid, t_window=[0, 1100], use_labels=True, sampling_frequency=30_000
 ):
     """Extract and format data from a specific IBL session.
     Parameters
     ----------
-    bin_fp: str
-        file path to the binary file containing channel recordings
-    meta_fp: str
-        file path to the meta file for bin_fp
+    rec: BinaryRecordingExtractor
+        recording extractor for the IBL binary to be extracted
+    meta_fp: Path
+        file path to the meta file for IBL recording
     pid: str
         pid for the IBL session/recording
     t_window: int
@@ -589,6 +554,7 @@ def extract_IBL(
     channel_index: numpy.ndarray
     templates: numpy.ndarray
     """
+    assert type(rec) == si.binaryfolder.BinaryFolderRecording, "rec must be a BinaryFolderRecording"
     one = ONE()
     ba = AllenAtlas()
 
@@ -596,8 +562,9 @@ def extract_IBL(
     spikes, clusters, channels = sl.load_spike_sorting()
     clusters = sl.merge_clusters(spikes, clusters, channels)
 
-    # Read in the spike train and geometry information for the portion of the recording we are using.
-    geom = read_geom_from_meta(Path(meta_fp))
+    # Read in the spike train and geometry information
+    geom = read_geom_from_meta(meta_fp)
+    
     spike_times = spikes["times"]
     spike_frames = sl.samples2times(spike_times, direction="reverse").astype("int")
     spike_train = np.concatenate(
@@ -609,15 +576,18 @@ def extract_IBL(
     )[0]
     spike_train = spike_train[in_rec_idxs, :]
     spike_train[:, 0] = spike_train[:, 0] - t_window[0] * sampling_frequency
-
+    
     # Create channel index
     channel_index = make_contiguous_channel_index(geom.shape[0], n_neighbors=40)
+    
     closest_channel_list = []
     for cluster_id in spikes["clusters"]:
         closest_channel = clusters["channels"][cluster_id]
         closest_channel_list.append(closest_channel)
     closest_channels = np.asarray(closest_channel_list)
     closest_channels = closest_channels[in_rec_idxs]
+    
+    bin_fp = rec._bin_kwargs['file_paths'][0]
 
     # Align the spike train and get templates for each putative neural unit
     (
@@ -636,6 +606,8 @@ def extract_IBL(
         reducer=np.median,
         do_temporal_decrease=False,
     )
+    
+    
     mcs = np.array(
         [templates[unit_id].ptp(0).argmax(0) for unit_id in range(len(templates))]
     )
@@ -789,24 +761,31 @@ def combine_datasets(data_folder_list, save_folder):
                 combined_data = np.vstack(data_list)
             np.save(os.path.join(save_folder, file + split), combined_data)
     # add spatial and temporal covariances to separate folders
+    covariances_dir = save_folder + '/covariances'
+    if not os.path.exists(covariances_dir):
+        os.makedirs(covariances_dir)
     for i, data_folder in enumerate(data_folder_list):
+        covariances_dir_curr = data_folder + '/covariances'
         temporal_cov = np.load(
-            os.path.join(data_folder, "temporal_cov.npy"), allow_pickle=True
+            os.path.join(covariances_dir_curr, "temporal_cov.npy"), allow_pickle=True
         )
         spatial_cov = np.load(
-            os.path.join(data_folder, "temporal_cov.npy"), allow_pickle=True
+            os.path.join(covariances_dir_curr, "temporal_cov.npy"), allow_pickle=True
         )
-        cov_folder = f"/covariances_ds{i}"
-        if not os.path.exists(save_folder + cov_folder):
-            os.makedirs(save_folder + cov_folder)
-        np.save(
-            os.path.join(save_folder + cov_folder, "temporal_cov.npy"), temporal_cov
-        )
-        np.save(os.path.join(save_folder + cov_folder, "spatial_cov.npy"), spatial_cov)
+        if i > 0:
+            np.save(
+                os.path.join(covariances_dir, f"temporal_cov_{i}.npy"), temporal_cov
+            )
+            np.save(os.path.join(covariances_dir, f"spatial_cov_{i}.npy"), spatial_cov)
+        else:
+            np.save(
+                os.path.join(covariances_dir, f"temporal_cov.npy"), temporal_cov
+            )
+            np.save(os.path.join(covariances_dir, f"spatial_cov.npy"), spatial_cov)
 
 
 def make_dataset(
-    bin_path,
+    rec,
     spike_index,
     geom,
     save_path,
@@ -830,8 +809,8 @@ def make_dataset(
     """Extract and format data from a simulated session.
     Parameters
     ----------
-    bin_path: str
-        file path to the channel recording
+    rec: BinaryRecordingExtractor
+        recording extractor for the IBL binary to be extracted
     spike_index: numpy.ndarray
         spike index of shape (2, len(spike_train)) or (3, len(spike_train)) that contains the spike train, max amplitude channel
         of each spike in the spike train(, and the putative kilosort neural unit from which each spike originates)
@@ -868,7 +847,7 @@ def make_dataset(
     random_seed: int
         random seed for waveform extraction
     """
-
+    assert type(rec) == si.binaryfolder.BinaryFolderRecording, "rec must be a BinaryFolderRecording"
     np.random.seed(random_seed)
     num_waveforms = train_num + val_num + test_num
     spikes_array = []
@@ -895,24 +874,28 @@ def make_dataset(
 
     if not os.path.exists(save_path):
         os.makedirs(save_path)
-
-    if save_covs:
-        if we is not None:
-            save_sim_covs(bin_path, save_path)
+    
+    if not inference:
+        covariance_path = save_path + '/covariances'
+        if not os.path.exists(covariance_path):
+            os.makedirs(covariance_path)
+        if save_covs:
+            if we is not None:
+                save_sim_covs(rec, covariance_path)
+            else:
+                save_real_covs(rec, covariance_path)
         else:
-            save_real_covs(bin_path, save_path)
-    else:
-        dir_path = os.path.abspath(os.path.dirname(__file__))
-        print(
-            f"copying over noise covariances from previous recording from {dir_path}/noise_covariances_IBL_dy016"
-        )
-        spatial_cov = np.load(dir_path + "/noise_covariances_IBL_dy016/spatial_cov.npy")
-        temporal_cov = np.load(
-            dir_path + "/noise_covariances_IBL_dy016/temporal_cov.npy"
-        )
-        np.save(os.path.join(save_path, "spatial_cov.npy"), spatial_cov)
-        np.save(os.path.join(save_path, "temporal_cov.npy"), temporal_cov)
-
+            dir_path = os.path.abspath(os.path.dirname(__file__))
+            print(
+                f"copying over noise covariances from previous recording from {dir_path}/noise_covariances_IBL_dy016"
+            )
+            spatial_cov = np.load(dir_path + "/noise_covariances_IBL_dy016/spatial_cov.npy")
+            temporal_cov = np.load(
+                dir_path + "/noise_covariances_IBL_dy016/temporal_cov.npy"
+            )
+            np.save(os.path.join(covariance_path, "spatial_cov.npy"), spatial_cov)
+            np.save(os.path.join(covariance_path, "temporal_cov.npy"), temporal_cov)
+    bin_path = rec._bin_kwargs['file_paths'][0]
     if unit_ids is None:
         data_chunks = chunk_data(spike_index, max_proc_len)
         if spike_index.shape[0] == 3:
@@ -936,6 +919,7 @@ def make_dataset(
                     mc_start,
                     mc_end,
                     num_chans_extract,
+                    spike_length_samples=spike_length_to_extract,
                 )
                 shifted_wf = shift_wf(crop_wf) if shift else crop_wf
                 spikes_array.append(shifted_wf)
@@ -949,7 +933,6 @@ def make_dataset(
             curr_spike_max_chan = []
             curr_masks = []
             curr_labels = []
-
             if (
                 not save_fewer
                 and len(spike_index[:, 0][np.where(spike_index[:, 2] == unit_id)[0]])
@@ -967,7 +950,7 @@ def make_dataset(
                 continue
             chosen_units.append(unit_id)
 
-            # Extract from Simulated Data extractor, otherwise use real data extraction
+            # Extract from simulated data extractor, otherwise use real data extraction
             if we is not None:
                 waveforms = we.get_waveforms("#{}".format(str(unit_id)))
                 waveforms = waveforms[:num_waveforms, :, depth_order]
@@ -1023,7 +1006,7 @@ def make_dataset(
                     else geom[mc_start:mc_end]
                 )
                 crop_wf, crop_chan, crop_geom, mask = pad_channels(
-                    curr_wf, curr_geom, mc_start, mc_end, num_chans_extract
+                    curr_wf, curr_geom, mc_start, mc_end, num_chans_extract, spike_length_samples=spike_length_to_extract,
                 )
 
                 shifted_wf = shift_wf(crop_wf) if shift else crop_wf
@@ -1132,8 +1115,6 @@ def make_dataset(
                 np.save(os.path.join(save_path, "labels_val.npy"), val_labels)
                 np.save(os.path.join(save_path, "labels_test.npy"), test_labels)
         else:
-            # save out all spikes (even for neurons that didn't have enough to extract) into train and test sets.
-            print("saving no split train dataset")
             train_set = np.concatenate(
                 [curr_arr[:train_num] for curr_arr in spikes_array]
             )

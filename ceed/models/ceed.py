@@ -139,33 +139,35 @@ class CEED(object):
             train_dataset, batch_size=batch_size, shuffle=True,
             num_workers=8, pin_memory=True, drop_last=True)
         
-        if save_metrics:
-            if self.multi_chan:
-                memory_dataset = WFDataset_lab(data_dir, split='train', multi_chan=self.multi_chan, transform=Crop(prob=0.0, num_extra_chans=self.num_extra_chans, ignore_chan_num=True), use_chan_pos=use_chan_pos)
-                memory_loader = torch.utils.data.DataLoader(
+        if self.multi_chan:
+            memory_dataset = WFDataset_lab(data_dir, split='train', multi_chan=self.multi_chan, transform=Crop(prob=0.0, num_extra_chans=self.num_extra_chans, ignore_chan_num=True), use_chan_pos=use_chan_pos)
+            memory_loader = torch.utils.data.DataLoader(
                     memory_dataset, batch_size=128, shuffle=False,
-                    num_workers=8, pin_memory=True, drop_last=False)
-                test_dataset = WFDataset_lab(data_dir, split='test', multi_chan=self.multi_chan, transform=Crop(prob=0.0, num_extra_chans=self.num_extra_chans, ignore_chan_num=True), use_chan_pos=use_chan_pos)
-                test_loader = torch.utils.data.DataLoader(
-                    test_dataset, batch_size=batch_size, shuffle=False,
-                    num_workers=8, pin_memory=True, drop_last=False)
-            else:
-                memory_dataset = WFDataset_lab(data_dir, split='train', multi_chan=False)
-                memory_loader = torch.utils.data.DataLoader(
-                    memory_dataset, batch_size=128, shuffle=False,
-                    num_workers=8, pin_memory=True, drop_last=False)
-                test_dataset = WFDataset_lab(data_dir, split='test', multi_chan=False)
-                test_loader = torch.utils.data.DataLoader(
-                    test_dataset, batch_size=batch_size, shuffle=False,
-                    num_workers=8, pin_memory=True, drop_last=False)
+                    num_workers=8, pin_memory=True, drop_last=False
+                )
+            test_dataset = WFDataset_lab(data_dir, split='test', multi_chan=self.multi_chan, 
+                                         transform=Crop(prob=0.0, num_extra_chans=self.num_extra_chans, ignore_chan_num=True), 
+                                         use_chan_pos=use_chan_pos)
+            test_loader = torch.utils.data.DataLoader(
+                test_dataset, batch_size=batch_size, shuffle=False,
+                num_workers=8, pin_memory=True, drop_last=False
+            )
         else:
-            memory_loader = None
-            test_loader = None
-        
+            memory_dataset = WFDataset_lab(data_dir, split='train', multi_chan=False)
+            memory_loader = torch.utils.data.DataLoader(
+                    memory_dataset, batch_size=128, shuffle=False,
+                    num_workers=8, pin_memory=True, drop_last=False
+                )
+            test_dataset = WFDataset_lab(data_dir, split='test', multi_chan=False)
+            test_loader = torch.utils.data.DataLoader(
+                test_dataset, batch_size=batch_size, shuffle=False,
+                num_workers=8, pin_memory=True, drop_last=False
+            )
         print("number of transfomer params: ", sum(p.numel() for n,p in self.model.named_parameters() if 'transformer' in n))
         print("number of fcpart params: ", sum(p.numel() for n,p in self.model.named_parameters() if ('lm_head' in n and 'proj' not in n)))
         print("number of Proj params: ", sum(p.numel() for n,p in self.model.named_parameters() if ('proj' in n)))
         print("number of online classifier params: ", sum(p.numel() for n,p in self.model.named_parameters() if 'online_head' in n))
+        print(len(train_loader))
 
         if optimizer == 'adam':
             optimizer = torch.optim.Adam(self.model.parameters(), lr, weight_decay=1e-4)
@@ -201,6 +203,7 @@ class CEED(object):
         print("starting training...")    
         simclr = SimCLR(model=self.model, proj=None, optimizer=optimizer, scheduler=scheduler, gpu=gpu, 
                         sampler=None, args=args, start_epoch=start_epoch)
+        print(test_loader)
         simclr.train(train_loader, memory_loader, test_loader)
 
 

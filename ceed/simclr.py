@@ -83,14 +83,13 @@ class SimCLR(object):
             logging.info(f"Start SimCLR training for {self.args.epochs} epochs.")
             logging.info(f"Training with gpu: {not self.args.disable_cuda}.")
             print(f"Start SimCLR training for {self.args.epochs} epochs, starting at {self.start_epoch}.")
-
+        print(f"Model checkpoint and metadata will be saved at {self.args.checkpoint_dir}")
         for epoch_counter in range(self.start_epoch, self.args.epochs):
             if self.args.add_train:
                 self.model.train()
             start_time = time.time()
             if self.args.ddp:
                 self.sampler.set_epoch(epoch_counter)
-            print('Epoch {}'.format(epoch_counter))
             for i, (wf, chan_nums, lab) in enumerate(train_loader):
                 chan_pos = None
                 if self.args.use_chan_pos:
@@ -159,7 +158,7 @@ class SimCLR(object):
                     self.logger.log_value('online_acc', online_acc, epoch_counter)
                     print("loss: ", loss.item(), "online acc: ", online_acc)
             
-            print(f"time for epoch {epoch_counter}: {time.time()-start_time}")
+            print(f"Epoch {epoch_counter}, time: {time.time()-start_time}, loss: {loss.item()}")
             if self.args.rank == 0 or not self.args.ddp:
                 # save model checkpoints
                 save_dict = {
@@ -170,8 +169,7 @@ class SimCLR(object):
                     }
                     
                 save_checkpoint(save_dict, is_best=False, filename=os.path.join(self.args.checkpoint_dir, 'checkpoint.pth'))
-                print(f"Model checkpoint and metadata has been saved at {self.args.checkpoint_dir}.")
-                logging.info(f"Model checkpoint and metadata has been saved at {self.args.checkpoint_dir}.")
+                logging.info(f"Model checkpoint and metadata has been saved at {self.args.checkpoint_dir}")
 
         if self.args.rank == 0 or not self.args.ddp:
             logging.info("Training has finished.")
@@ -183,10 +181,10 @@ class SimCLR(object):
                 'state_dict': self.model.state_dict(),
                 'optimizer': self.optimizer.state_dict(),
             }, is_best=False, filename=os.path.join(self.args.checkpoint_dir, 'final.pth'))
-            logging.info(f"Model checkpoint and metadata has been saved at {self.args.checkpoint_dir}.")
+            logging.info(f"Model checkpoint and metadata has been saved at {self.args.checkpoint_dir}")
         
             # save out the representations of the test and memory loaders using the final checkpoint
-            save_reps(self.model, test_loader, os.path.join(self.args.checkpoint_dir, 'final.pth'), split='test', multi_chan=False, rep_after_proj=True, use_chan_pos=False, suffix='')
-            save_reps(self.model, memory_loader, os.path.join(self.args.checkpoint_dir, 'final.pth'), split='test', multi_chan=False, rep_after_proj=True, use_chan_pos=False, suffix='')
+            save_reps(self.model, test_loader, os.path.join(self.args.checkpoint_dir, 'final.pth'), split='test', multi_chan=self.multichan, rep_after_proj=True, use_chan_pos=False, suffix='')
+            save_reps(self.model, memory_loader, os.path.join(self.args.checkpoint_dir, 'final.pth'), split='train', multi_chan=self.multichan, rep_after_proj=True, use_chan_pos=False, suffix='')
             
             

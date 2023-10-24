@@ -11,6 +11,8 @@ from scipy import signal
 import warnings
 warnings.filterwarnings("ignore")
 
+import glob 
+
 
 class AmpJitter(object):
     """Rescales waveform amplitude by some small factor
@@ -77,8 +79,8 @@ class GaussianNoise(object):
 class SmartNoise(object):
     """Add randomly generated noise from distribution determined by spatial and temporal covariances
     """
-    temporal_name = 'temporal_cov_example.npy'
-    spatial_name = 'spatial_cov_example.npy'
+    temporal_name = 'temporal_cov.npy'
+    spatial_name = 'spatial_cov.npy'
 
     def __init__(self, root_folder, temporal_cov=None, spatial_cov=None, noise_scale=1.0, normalize=False):
         """
@@ -164,9 +166,9 @@ class TorchSmartNoise(object):
     """Add randomly generated noise from distribution determined by spatial and temporal covariances. 
     Generation and addition happens on gpu for speed purposes.
     """
-    temporal_name = 'temporal_cov_example.npy'
-    spatial_name = 'spatial_cov_example.npy'
-
+    temporal_covs_path = '/covariances/temporal*'
+    spatial_covs_path = '/covariances/spatial*'
+    
     def __init__(self, root_folder=None, temporal_cov=None, spatial_cov=None, noise_scale=1.0, normalize=False, gpu=0, p=0.5):
         """
         Args:
@@ -186,18 +188,31 @@ class TorchSmartNoise(object):
                 noise will be generated and added to waveform with this probability.
         """
         self.root_folder = root_folder
-        if temporal_cov is None:
-            temporal_cov = np.load(os.path.join(self.root_folder, self.temporal_name))
-        if spatial_cov is None:
-            spatial_cov = np.load(os.path.join(self.root_folder, self.spatial_name))
-        self.temporal_cov = torch.from_numpy(temporal_cov).cuda(gpu,non_blocking=True).float()
-        self.spatial_cov = torch.from_numpy(spatial_cov).cuda(gpu,non_blocking=True).float()
+        if temporal_cov is None or spatial_cov is None:
+            temporal_covs_files = glob.glob(root_folder + self.temporal_covs_path)
+            spatial_covs_files = glob.glob(root_folder + self.spatial_covs_path)
+            spatial_temporal_covs = [(spatial_covs_files[i], temporal_covs_files[i]) for i in range(len(temporal_covs_files))]
+        else:
+            spatial_temporal_covs = [(spatial_cov, temporal_cov)]
+        self.spatial_temporal_covs_tensors = []
+        for st_cov_tuple in spatial_temporal_covs:
+            spatial_cov_path, temporal_cov_path = st_cov_tuple
+            spatial_cov = np.load(spatial_cov_path)
+            temporal_cov = np.load(temporal_cov_path)
+            spatial_cov_tensor = torch.from_numpy(spatial_cov).cuda(gpu,non_blocking=True).float()
+            temporal_cov_tensor = torch.from_numpy(temporal_cov).cuda(gpu,non_blocking=True).float()
+            self.spatial_temporal_covs_tensors.append((spatial_cov_tensor, temporal_cov_tensor))
         self.noise_scale = np.float32(noise_scale)
         self.normalize = normalize
         self.gpu = gpu
         self.prob = p
 
     def __call__(self, sample):
+        
+        #sample noise from random recording
+        rec_id = np.random.choice(range(len(self.spatial_temporal_covs_tensors)))
+        spatial_cov, temporal_cov = self.spatial_temporal_covs_tensors[rec_id]
+        
         chan_locs = None
         if len(sample) == 2:
             wf, chan_nums = sample
@@ -213,10 +228,10 @@ class TorchSmartNoise(object):
                 wf = np.expand_dims(wf, axis=1)
             bs, n_chans, w = wf.shape
 
-            assert self.temporal_cov.shape[0] == w
+            assert temporal_cov.shape[0] == w
 
-            n_chans_total, _ = self.spatial_cov.shape
-            wf_length, _ = self.temporal_cov.shape
+            n_chans_total, _ = spatial_cov.shape
+            wf_length, _ = temporal_cov.shape
 
             # pad channels that cross edges with edge chan numbers
             if type(chan_nums) != np.int64:
@@ -227,10 +242,10 @@ class TorchSmartNoise(object):
             with torch.no_grad():
                 noise = torch.cuda.FloatTensor(bs, wf_length, n_chans_total).normal_()
 
-                spatial_adj_noise = torch.bmm(noise, self.spatial_cov.expand(bs, -1, -1)).view((bs, wf_length, n_chans_total))
+                spatial_adj_noise = torch.bmm(noise, spatial_cov.expand(bs, -1, -1)).view((bs, wf_length, n_chans_total))
                 spatial_adj_noise = torch.stack([spatial_adj_noise[i, :, chan_num] for i, chan_num in enumerate(chan_nums)])
 
-                the_noise = torch.bmm(spatial_adj_noise.permute(0, 2, 1), self.temporal_cov.expand(bs, -1, -1)).view(bs, n_chans, -1)
+                the_noise = torch.bmm(spatial_adj_noise.permute(0, 2, 1), temporal_cov.expand(bs, -1, -1)).view(bs, n_chans, -1)
 
                 noise_wfs = self.noise_scale * the_noise
                 wf = wf + noise_wfs
@@ -444,8 +459,8 @@ class Crop(object):
             wf = np.expand_dims(wf, axis=0)
         if self.ignore_chan_num:
             if chan_locs is not None:
-                return wf.astype('float16'), chan_locs
-            return wf.astype('float16')
+                return wf.astype('float32'), chan_locs
+            return wf.astype('float32')
         
         if chan_locs is None:
             return [wf, chan_nums]

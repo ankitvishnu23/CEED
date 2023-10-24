@@ -189,6 +189,11 @@ def knn_predict(feature, feature_bank, feature_labels, classes, knn_k, knn_t):
     # counts for each class
     one_hot_label = torch.zeros(feature.size(0) * knn_k, classes, device=sim_labels.device)
     # [B*K, C]
+    assert (sim_labels >= 0).all(), "label indices less than 0 detected!"
+    assert (sim_labels < classes).all(), "label indices grater than classes detected!"
+    assert one_hot_label.device == sim_labels.device, "Device mismatch detected!"
+    assert sim_labels.dtype == torch.int64, "sim_labels should be of dtype torch.int64!"
+
     one_hot_label = one_hot_label.scatter(dim=-1, index=sim_labels.view(-1, 1), value=1.0)
     # weighted score ---> [B, C]
     pred_scores = torch.sum(one_hot_label.view(feature.size(0), -1, classes) * sim_weight.unsqueeze(dim=-1), dim=1)
@@ -204,7 +209,6 @@ def gmm_monitor(net, memory_data_loader, test_data_loader, device='cuda', hide_p
         targets = memory_data_loader.dataset.targets
 
     net.eval()
-    classes = test_data_loader.dataset.num_classes
 
     num_iters = 50 if epoch_num == args.epochs-1 else 1
 
@@ -213,6 +217,7 @@ def gmm_monitor(net, memory_data_loader, test_data_loader, device='cuda', hide_p
     random.seed(0)
     reps_train, labels_train = get_torch_reps(net, memory_data_loader, device, args)
     reps_test, labels_test = get_torch_reps(net, test_data_loader, device, args)
+    classes = max(len(np.unique(labels_train)), len(np.unique(labels_test)))
     for i in range(num_iters):
         # covariance_type : {'full', 'tied', 'diag', 'spherical'}
         covariance_type = 'full'
@@ -240,7 +245,7 @@ def knn_monitor(net, memory_data_loader, test_data_loader, device='cuda', k=200,
         targets = memory_data_loader.dataset.targets
 
     net.eval()
-    classes = test_data_loader.dataset.num_classes
+    classes = len(np.unique(targets))
     # classes = len(memory_data_loader.dataset.classes)
     total_top1, total_top5, total_num, feature_bank = 0.0, 0.0, 0, []
     with torch.no_grad():
