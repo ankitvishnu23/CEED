@@ -148,10 +148,12 @@ class CEED(object):
         
         if self.multi_chan:
             memory_dataset = WFDataset_lab(data_dir, 
-                                               split='train', 
-                                               multi_chan=self.multi_chan, 
-                                               transform=Crop(prob=0.0, num_extra_chans=self.num_extra_chans, ignore_chan_num=True), 
-                                               use_chan_pos=use_chan_pos)
+                                           split='train', 
+                                           multi_chan=self.multi_chan, 
+                                           transform=Crop(prob=0.0, num_extra_chans=self.num_extra_chans, ignore_chan_num=True), 
+                                           use_chan_pos=use_chan_pos,
+                                           n_test_units=args.n_test_units,
+                                           test_units_list=args.test_units_list)
             memory_loader = torch.utils.data.DataLoader(
                     memory_dataset, batch_size=128, shuffle=False,
                     num_workers=8, pin_memory=True, drop_last=False
@@ -159,10 +161,8 @@ class CEED(object):
                 )
             test_dataset = WFDataset_lab(data_dir, 
                                              split='test', 
-                                             multi_chan=self.multi_chan, 
-                                         
+                                             multi_chan=self.multi_chan,
                                              transform=Crop(prob=0.0, num_extra_chans=self.num_extra_chans, ignore_chan_num=True), 
-                                         
                                              use_chan_pos=use_chan_pos,
                                              n_test_units=n_test_units,
                                              test_units_list=test_units_list)
@@ -173,7 +173,9 @@ class CEED(object):
         else:
             memory_dataset = WFDataset_lab(data_dir, 
                                                split='train', 
-                                               multi_chan=False)
+                                               multi_chan=False,
+                                               n_test_units=args.n_test_units,
+                                               test_units_list=args.test_units_list)
             memory_loader = torch.utils.data.DataLoader(
                     memory_dataset, batch_size=128, shuffle=False,
                     num_workers=8, pin_memory=True, drop_last=False

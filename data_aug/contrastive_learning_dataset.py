@@ -21,7 +21,7 @@ class WFDataset(Dataset):
     def __init__(
         self,
         root: str,
-        use_chan_pos: bool = False, 
+        use_chan_pos: bool = False,
         transform: Optional[Callable] = None,
         target_transform: Optional[Callable] = None,
         detected_spikes: bool = False
@@ -191,23 +191,28 @@ class WFDataset_lab(Dataset):
             self.targets = np.load(os.path.join(root, self.test_targets_fn))
             self.chan_nums = np.load(os.path.join(root, self.spike_mcs_test_fn))
             self.channel_locs = np.load(os.path.join(root, self.chan_coords_test_fn))
-
-            # select a subset of the test units for quicker inference during test time
-            np.random.seed(0)
-            test_units = np.array(test_units_list) if test_units_list is not None else \
-                            np.random.choice(np.unique(self.targets), n_test_units, replace=False)
-            test_unit_idxs = np.array([idx for idx, unit in enumerate(self.targets) if unit in test_units])
-
-            self.data = self.data[test_unit_idxs]
-            self.targets = self.targets[test_unit_idxs]
-            self.chan_nums = self.chan_nums[test_unit_idxs]
-            self.channel_locs = self.channel_locs[test_unit_idxs]
-
         elif split == 'val':
             self.data = np.load(os.path.join(root, self.val_set_fn)).astype('float32')
             self.targets = np.load(os.path.join(root, self.val_targets_fn))
             self.chan_nums = np.load(os.path.join(root, self.spike_mcs_val_fn))
             self.channel_locs = np.load(os.path.join(root, self.chan_coords_val_fn))
+
+        # select a subset of the test units for quicker inference during test time
+        np.random.seed(0)
+        test_units = np.sort(test_units_list) if test_units_list is not None else \
+                        np.sort(np.random.choice(np.unique(self.targets), n_test_units, replace=False))
+        unique_labels = np.unique(self.targets)
+        bad_units = np.array([unit for unit in test_units if unit not in unique_labels])
+        assert len(bad_units) == 0, "Units {} are not in the test set, please retry without these test units.".format(bad_units)
+
+        num_units = len(test_units)
+        test_units_dict = dict(zip(test_units, np.arange(num_units)))
+        test_unit_idxs = np.array([idx for idx, unit in enumerate(self.targets) if unit in test_units])
+
+        self.data = self.data[test_unit_idxs]
+        self.targets = np.array([test_units_dict[unit] for unit in self.targets if unit in test_units])
+        self.chan_nums = self.chan_nums[test_unit_idxs]
+        self.channel_locs = self.channel_locs[test_unit_idxs]
 
         self.root = root
         self.transform = transform

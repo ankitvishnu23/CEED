@@ -71,7 +71,9 @@ def main_worker(gpu, args):
                                            split='val', 
                                            multi_chan=args.multi_chan, 
                                            transform=Crop(prob=0.0, num_extra_chans=num_extra_chans, ignore_chan_num=True), 
-                                           use_chan_pos=args.use_chan_pos)
+                                           use_chan_pos=args.use_chan_pos,
+                                           n_test_units=args.n_test_units,
+                                           test_units_list=args.test_units_list)
             memory_loader = torch.utils.data.DataLoader(
                 memory_dataset, batch_size=128, shuffle=False,
                 num_workers=args.workers, pin_memory=True, drop_last=False)
@@ -89,7 +91,9 @@ def main_worker(gpu, args):
         else:
             memory_dataset = WFDataset_lab(args.data, 
                                            split='train', 
-                                           multi_chan=False)
+                                           multi_chan=False,
+                                           n_test_units=args.n_test_units,
+                                           test_units_list=args.test_units_list)
             memory_loader = torch.utils.data.DataLoader(
                 memory_dataset, batch_size=128, shuffle=False,
                 num_workers=args.workers, pin_memory=True, drop_last=False)
@@ -279,7 +283,7 @@ if __name__ == "__main__":
     parser.add_argument('--online_head', action='store_true') # default = False
     parser.add_argument('--pos_enc', default ='seq_11times', type=str)    
     parser.add_argument('--no_collide', action='store_true') # default = False
-    parser.add_argument('--aug_p_dict', default=None, type=list) # prob of applying each aug in pipeline
+    parser.add_argument('--aug_p_dict', default=None, nargs='+', type=float) # prob of applying each aug in pipeline
     parser.add_argument('--num_extra_chans', default=0, type=int)
     parser.add_argument('--add_train', default=True) # default = True
     parser.add_argument('--use_chan_pos', action='store_true') # default = False
@@ -288,7 +292,7 @@ if __name__ == "__main__":
     parser.add_argument('--no_knn', action='store_true') # default = False
     parser.add_argument('--test_split', default ='test', type=str) 
     parser.add_argument('--n_test_units', default=10, type=int) # number of units to subsample for training metrics
-    parser.add_argument('--test_units_list', default=None, type=list) # allows choosing the units for training metrics
+    parser.add_argument('--test_units_list', default=None, nargs='+', type=int) # allows choosing the units for training metrics
 
     args = parser.parse_args()
     
