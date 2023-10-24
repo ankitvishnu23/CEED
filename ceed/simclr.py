@@ -85,8 +85,8 @@ class SimCLR(object):
             print(f"Start SimCLR training for {self.args.epochs} epochs, starting at {self.start_epoch}.")
         print(f"Model checkpoint and metadata will be saved at {self.args.checkpoint_dir}")
         for epoch_counter in range(self.start_epoch, self.args.epochs):
-            if self.args.add_train:
-                self.model.train()
+            # if self.args.add_train:
+            self.model.train()
             start_time = time.time()
             if self.args.ddp:
                 self.sampler.set_epoch(epoch_counter)
