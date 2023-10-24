@@ -918,8 +918,7 @@ def make_dataset(
             )
             np.save(os.path.join(covariance_path, "spatial_cov.npy"), spatial_cov)
             np.save(os.path.join(covariance_path, "temporal_cov.npy"), temporal_cov)
-    bin_path = rec._bin_kwargs['file_paths'][0]    
-    unit_ids = unit_ids if unit_ids is not None else np.unique()
+    bin_path = rec._bin_kwargs['file_paths'][0]
 
     #for the extracted spikes dataset
     if extracted_spikes:
