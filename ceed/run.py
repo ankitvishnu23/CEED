@@ -46,8 +46,7 @@ def main_worker(gpu, args):
                                         args.n_views,
                                         num_extra_chans,
                                         detected_spikes=args.detected_spikes,
-                                        aug_p_dict=args.aug_p_dict,
-                                        )
+                                        aug_p_dict=args.aug_p_dict)
     print("ddp:", args.ddp)
     
     if args.ddp:
@@ -68,20 +67,38 @@ def main_worker(gpu, args):
     # define memory and test dataset for knn monitoring
     if not args.ddp and not args.no_knn:
         if args.multi_chan:
-            memory_dataset = WFDataset_lab(args.data, split='val', multi_chan=args.multi_chan, transform=Crop(prob=0.0, num_extra_chans=num_extra_chans, ignore_chan_num=True), use_chan_pos=args.use_chan_pos)
+            memory_dataset = WFDataset_lab(args.data, 
+                                           split='val', 
+                                           multi_chan=args.multi_chan, 
+                                           transform=Crop(prob=0.0, num_extra_chans=num_extra_chans, ignore_chan_num=True), 
+                                           use_chan_pos=args.use_chan_pos)
             memory_loader = torch.utils.data.DataLoader(
                 memory_dataset, batch_size=128, shuffle=False,
                 num_workers=args.workers, pin_memory=True, drop_last=False)
-            test_dataset = WFDataset_lab(args.data, split='test', multi_chan=args.multi_chan, transform=Crop(prob=0.0, num_extra_chans=num_extra_chans, ignore_chan_num=True), use_chan_pos=args.use_chan_pos)
+            
+            test_dataset = WFDataset_lab(args.data, 
+                                         split='test', 
+                                         multi_chan=args.multi_chan, 
+                                         transform=Crop(prob=0.0, num_extra_chans=num_extra_chans, ignore_chan_num=True), 
+                                         use_chan_pos=args.use_chan_pos,
+                                         n_test_units=args.n_test_units,
+                                         test_units_list=args.test_units_list)
             test_loader = torch.utils.data.DataLoader(
                 test_dataset, batch_size=args.batch_size, shuffle=False,
                 num_workers=args.workers, pin_memory=True, drop_last=False)
         else:
-            memory_dataset = WFDataset_lab(args.data, split='train', multi_chan=False)
+            memory_dataset = WFDataset_lab(args.data, 
+                                           split='train', 
+                                           multi_chan=False)
             memory_loader = torch.utils.data.DataLoader(
                 memory_dataset, batch_size=128, shuffle=False,
                 num_workers=args.workers, pin_memory=True, drop_last=False)
-            test_dataset = WFDataset_lab(args.data, split='test', multi_chan=False)
+            
+            test_dataset = WFDataset_lab(args.data, 
+                                         split='test', 
+                                         multi_chan=False,
+                                         n_test_units=args.n_test_units,
+                                         test_units_list=args.test_units_list)
             test_loader = torch.utils.data.DataLoader(
                 test_dataset, batch_size=args.batch_size, shuffle=False,
                 num_workers=args.workers, pin_memory=True, drop_last=False)
@@ -96,8 +113,13 @@ def main_worker(gpu, args):
         gptconf = GPTConfig(**model_args)
         model = Single_GPT(gptconf).cuda(gpu)
     else:
-        model = ModelSimCLR(base_model=args.arch, out_dim=args.out_dim, proj_dim=args.proj_dim, \
-            fc_depth=args.fc_depth, expand_dim=args.expand_dim, multichan=args.multi_chan, input_size=(2*num_extra_chans+1)*121).cuda(gpu)
+        model = ModelSimCLR(base_model=args.arch, 
+                            out_dim=args.out_dim, 
+                            proj_dim=args.proj_dim,
+                            fc_depth=args.fc_depth, 
+                            expand_dim=args.expand_dim, 
+                            multichan=args.multi_chan, 
+                            input_size=(2*num_extra_chans+1)*121).cuda(gpu)
 
     if not args.no_proj:
         if args.arch == 'conv_encoder':
@@ -264,7 +286,9 @@ if __name__ == "__main__":
     parser.add_argument('--cell_type', action='store_true') # default = False
     parser.add_argument('--detected_spikes', action='store_true') # default = False
     parser.add_argument('--no_knn', action='store_true') # default = False
-    parser.add_argument('--test_split', default ='test', type=str)    
+    parser.add_argument('--test_split', default ='test', type=str) 
+    parser.add_argument('--n_test_units', default=10, type=int) # number of units to subsample for training metrics
+    parser.add_argument('--test_units_list', default=None, type=list) # allows choosing the units for training metrics
 
     args = parser.parse_args()
     

@@ -81,6 +81,8 @@ class SmartNoise(object):
     """
     temporal_name = 'temporal_cov.npy'
     spatial_name = 'spatial_cov.npy'
+    temporal_name = 'temporal_cov.npy'
+    spatial_name = 'spatial_cov.npy'
 
     def __init__(self, root_folder, temporal_cov=None, spatial_cov=None, noise_scale=1.0, normalize=False):
         """

@@ -175,7 +175,8 @@ class WFDataset_lab(Dataset):
         multi_chan: bool = False,
         split: str = 'train',
         transform: Optional[Callable] = None,
-        
+        n_test_units: int = 10,
+        test_units_list: list = None,
     ) -> None:
 
         super().__init__()
@@ -190,15 +191,24 @@ class WFDataset_lab(Dataset):
             self.targets = np.load(os.path.join(root, self.test_targets_fn))
             self.chan_nums = np.load(os.path.join(root, self.spike_mcs_test_fn))
             self.channel_locs = np.load(os.path.join(root, self.chan_coords_test_fn))
+
+            # select a subset of the test units for quicker inference during test time
+            np.random.seed(0)
+            test_units = np.array(test_units_list) if test_units_list is not None else \
+                            np.random.choice(np.unique(self.targets), n_test_units, replace=False)
+            test_unit_idxs = np.array([idx for idx, unit in enumerate(self.targets) if unit in test_units])
+
+            self.data = self.data[test_unit_idxs]
+            self.targets = self.targets[test_unit_idxs]
+            self.chan_nums = self.chan_nums[test_unit_idxs]
+            self.channel_locs = self.channel_locs[test_unit_idxs]
+
         elif split == 'val':
             self.data = np.load(os.path.join(root, self.val_set_fn)).astype('float32')
             self.targets = np.load(os.path.join(root, self.val_targets_fn))
             self.chan_nums = np.load(os.path.join(root, self.spike_mcs_val_fn))
             self.channel_locs = np.load(os.path.join(root, self.chan_coords_val_fn))
-            
-        # self.data: Any = []
 
-        # now load the numpy array
         self.root = root
         self.transform = transform
         self.use_chan_pos = use_chan_pos

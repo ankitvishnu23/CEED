@@ -728,6 +728,25 @@ def chunk_data(spike_index, max_proc_len=25000):
     return chunks
 
 
+def all_units_except(spike_index, exclude_units):
+    """Return set of unit ids that for a spike index that exclude the given unit ids.
+    Parameters
+    ----------
+    spike_index: numpy.ndarray
+        spike index of shape (3, len(spike_train)) that contains the spike train, max amplitude channel
+        of each spike in the spike train, and the putative kilosort neural unit from which each spike originates. This
+        shape is required for this function.
+    exclude_units: list
+        list of units to exclude
+    """
+    assert spike_index.shape[0] == 3, "Spike Index has insufficient rows. \
+            Function requires spike times, max channels, and putative unit. Please rerun extract_IBL function with labels \
+            or include all information requested in spike index."
+    exclude_units = np.array(exclude_units)
+    unit_ids =np.sort(np.unique(spike_index[2, :]))
+    return np.setdiff1d(unit_ids, exclude_units)
+
+
 def combine_datasets(data_folder_list, save_folder):
     """Combine multiple CEED datasets to make a larger dataset. Can be used to train a model from multiple recordings.
     Parameters
@@ -801,6 +820,7 @@ def make_dataset(
     test_num=200,
     plot=False,
     inference=False,
+    extracted_spikes=False,
     normalize=False,
     shift=False,
     save_fewer=False,
@@ -813,7 +833,8 @@ def make_dataset(
         recording extractor for the IBL binary to be extracted
     spike_index: numpy.ndarray
         spike index of shape (2, len(spike_train)) or (3, len(spike_train)) that contains the spike train, max amplitude channel
-        of each spike in the spike train(, and the putative kilosort neural unit from which each spike originates)
+        of each spike in the spike train(, and the putative kilosort neural unit from which each spike originates) on the rows and
+        specifically in that order.
     geom: numpy.ndarray
         the probe geometry for the recording.
     save_path: str
@@ -838,6 +859,8 @@ def make_dataset(
         save out plot of spikes per unit in a plot folder
     inference: bool
         flag to only save out test sets of spikes for inference, rather than train/val sets as well for training new models
+    extracted_spikes: bool
+        flag to save out all spikes in the recording without caring about putative unit information.
     normalize: bool
         flag to normalize spikes into range [-1, 1], especially useful for celltype tasks/training
     shift: bool
@@ -895,8 +918,11 @@ def make_dataset(
             )
             np.save(os.path.join(covariance_path, "spatial_cov.npy"), spatial_cov)
             np.save(os.path.join(covariance_path, "temporal_cov.npy"), temporal_cov)
-    bin_path = rec._bin_kwargs['file_paths'][0]
-    if unit_ids is None:
+    bin_path = rec._bin_kwargs['file_paths'][0]    
+    unit_ids = unit_ids if unit_ids is not None else np.unique()
+
+    #for the extracted spikes dataset
+    if extracted_spikes:
         data_chunks = chunk_data(spike_index, max_proc_len)
         if spike_index.shape[0] == 3:
             chosen_units = np.unique(spike_index[2, :])
@@ -926,6 +952,11 @@ def make_dataset(
                 geom_locs_array.append(crop_geom)
                 max_chan_array.append(crop_chan)
     else:
+        assert spike_index.shape[0] == 3, "Spike Index has insufficient rows. \
+            Function requires spike times, max channels, and putative unit. Please rerun extract_IBL function with labels \
+            or include all information requested in spike index."
+        unit_ids = unit_ids if unit_ids is not None else np.sort(np.unique(spike_index[2, :]))
+
         spike_index = spike_index.T
         for k, unit_id in tqdm(enumerate(unit_ids)):
             curr_temp_wfs = []
@@ -1023,6 +1054,7 @@ def make_dataset(
             masks_array.append(np.asarray(curr_masks))
             labels_array.append(np.asarray(curr_labels))
 
+            # plotting code saves 100 spikes for each unit to a folder
             if plot:
                 plot_folder = os.path.join(save_path, "wf_plots")
                 fig = plt.figure(figsize=(2 + int(num_chans_extract), 3))
@@ -1035,7 +1067,7 @@ def make_dataset(
                     else templates[unit_id].T[mc]
                 )
                 curr_temp = shift_wf(curr_temp) if we is not None else curr_temp
-                ax0.plot(x, curr_temp)
+                ax0.plot(np.arange(121), curr_temp)
                 ax0.axvline(42)
                 ax0.axes.get_xaxis().set_visible(False)
                 ax1 = fig.add_subplot(gs[1:], sharey=ax0)
@@ -1061,6 +1093,7 @@ def make_dataset(
                 fig.subplots_adjust(wspace=0, hspace=0.25)
                 plt.savefig(os.path.join(plot_folder, f"unit{str(unit_id)}"))
                 plt.close()
+
     if not save_fewer:
         spikes_array = np.concatenate(spikes_array)
         geom_locs_array = np.concatenate(geom_locs_array)
