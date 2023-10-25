@@ -29,7 +29,7 @@ install_requires = [
     "torchtyping",
     "typeguard",
     "umap-learn",
-    "pyfftw"
+    "pyfftw",
 ]
 
 

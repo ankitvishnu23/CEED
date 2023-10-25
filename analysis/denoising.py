@@ -8,14 +8,25 @@ class SingleChanDenoiser(nn.Module):
 
     def __init__(
         # self, n_filters=[16, 8, 4], filter_sizes=[5, 11, 21], spike_size=121
-        self, n_filters=[16, 8], filter_sizes=[5, 11], spike_size=121
+        self,
+        n_filters=[16, 8],
+        filter_sizes=[5, 11],
+        spike_size=121,
     ):
         super().__init__()
-        self.conv1 = nn.Sequential(nn.Conv1d(1, n_filters[0], filter_sizes[0]), nn.ReLU())
-        self.conv2 = nn.Sequential(nn.Conv1d(n_filters[0], n_filters[1], filter_sizes[1]), nn.ReLU())
+        self.conv1 = nn.Sequential(
+            nn.Conv1d(1, n_filters[0], filter_sizes[0]), nn.ReLU()
+        )
+        self.conv2 = nn.Sequential(
+            nn.Conv1d(n_filters[0], n_filters[1], filter_sizes[1]), nn.ReLU()
+        )
         if len(n_filters) > 2:
-            self.conv3 = nn.Sequential(nn.Conv1d(n_filters[1], n_filters[2], filter_sizes[2]), nn.ReLU())
-        n_input_feat = n_filters[1] * (spike_size - filter_sizes[0] - filter_sizes[1] + 2)
+            self.conv3 = nn.Sequential(
+                nn.Conv1d(n_filters[1], n_filters[2], filter_sizes[2]), nn.ReLU()
+            )
+        n_input_feat = n_filters[1] * (
+            spike_size - filter_sizes[0] - filter_sizes[1] + 2
+        )
         self.out = nn.Linear(n_input_feat, spike_size)
 
     def forward(self, x):

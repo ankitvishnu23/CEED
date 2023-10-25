@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 import torch.distributed as dist
+
 # from classy_vision.generic.distributed_util import (
 #     convert_to_distributed_tensor,
 #     convert_to_normal_tensor,
@@ -55,5 +56,3 @@ from utils.utils import get_torch_reps
 #         gathered_tensors = [tensor]
 #     gathered_tensor = torch.cat(gathered_tensors, 0)
 #     return gathered_tensor
-
-

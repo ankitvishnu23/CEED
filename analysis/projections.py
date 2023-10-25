@@ -6,10 +6,17 @@ import numpy as np
 import torch
 
 
-def learn_manifold_umap(data, umap_dim, umap_min_dist=0.2, umap_metric='euclidean', umap_neighbors=10):
+def learn_manifold_umap(
+    data, umap_dim, umap_min_dist=0.2, umap_metric="euclidean", umap_neighbors=10
+):
     md = float(umap_min_dist)
-    return umap.UMAP(random_state=0, metric=umap_metric, n_components=umap_dim, n_neighbors=umap_neighbors,
-                    min_dist=md).fit_transform(data)
+    return umap.UMAP(
+        random_state=0,
+        metric=umap_metric,
+        n_components=umap_dim,
+        n_neighbors=umap_neighbors,
+        min_dist=md,
+    ).fit_transform(data)
 
 
 def pca_train(train, test, n_comps):
@@ -24,7 +31,7 @@ def pca(S, n_comps):
     return pca_.fit_transform(S), pca_.explained_variance_ratio_, pca_
 
 
-def get_flattened_data(dataset, denoise=False, denoise_path=''):
+def get_flattened_data(dataset, denoise=False, denoise_path=""):
     if denoise:
         denoiser = SingleChanDenoiser().load(denoise_path)
     wfs_full = []
@@ -34,8 +41,16 @@ def get_flattened_data(dataset, denoise=False, denoise_path=''):
         if denoise:
             with torch.no_grad():
                 for j in range(curr_wf.shape[0]):
-                    curr_wf[j] = denoiser(torch.from_numpy(curr_wf[j].reshape(1, 121).astype('float32'))).cpu().numpy()
-        curr_wf = curr_wf.flatten().squeeze().astype('float32')
+                    curr_wf[j] = (
+                        denoiser(
+                            torch.from_numpy(
+                                curr_wf[j].reshape(1, 121).astype("float32")
+                            )
+                        )
+                        .cpu()
+                        .numpy()
+                    )
+        curr_wf = curr_wf.flatten().squeeze().astype("float32")
         wfs_full.append(curr_wf)
         labels_full.append(curr_label)
     wfs_full = np.array(wfs_full)
@@ -51,5 +66,5 @@ def compute_reps_test(model, test_wfs):
         with torch.no_grad():
             og_rep = model(torch.from_numpy(og_temp.reshape(1, -1)).double())
         og_reps.append(og_rep.numpy())
-    
+
     return np.squeeze(np.array(og_reps))

@@ -254,7 +254,7 @@ def search_noise_snippets(
             count += 1
             trial = 0
 
-            #print("Found %i/%i...", count, sample_size)
+            # print("Found %i/%i...", count, sample_size)
 
         trial += 1
 
@@ -438,24 +438,28 @@ def save_sim_covs(rec_path, save_path, spike_length_samples=121):
     np.save(os.path.join(save_path, "temporal_cov.npy"), temporal_cov)
 
 
-def save_real_covs(rec, save_path, spike_length_samples=121, window_size=50, time_samples=300000):
+def save_real_covs(
+    rec, save_path, spike_length_samples=121, window_size=50, time_samples=300000
+):
     """Create and save temporal and spatial covariance matrices for real data.
-    Parameters
-    ----------
-    rec: BinaryRecordingExtractor
-        recording extractor for the IBL binary to be extracted
-    save_path: str
-        absolute path location to store covariance matrices
-    spike_length_samples: int
-        number of samples for each waveform
-    window_size: int
-        window size (in samples) for estimating temporal cov
-    time_samples: int
-templates_sess2        number of samples to read in from the recording to estimate covs
+        Parameters
+        ----------
+        rec: BinaryRecordingExtractor
+            recording extractor for the IBL binary to be extracted
+        save_path: str
+            absolute path location to store covariance matrices
+        spike_length_samples: int
+            number of samples for each waveform
+        window_size: int
+            window size (in samples) for estimating temporal cov
+        time_samples: int
+    templates_sess2        number of samples to read in from the recording to estimate covs
     """
     num_frames = rec.get_num_frames()
-    snippet = rec.get_traces(start_frame=0, end_frame=min(num_frames,time_samples))
-    spatial_cov, temporal_cov = noise_whitener(snippet, spike_length_samples, window_size)
+    snippet = rec.get_traces(start_frame=0, end_frame=min(num_frames, time_samples))
+    spatial_cov, temporal_cov = noise_whitener(
+        snippet, spike_length_samples, window_size
+    )
 
     np.save(os.path.join(save_path, "spatial_cov.npy"), spatial_cov)
     np.save(os.path.join(save_path, "temporal_cov.npy"), temporal_cov)
@@ -491,8 +495,8 @@ def download_IBL(pid, save_folder, t_window=[0, 500], overwrite=True):
     folder = Path(save_folder)
     standardized_file = folder / f"{binary.stem}.normalized.bin"
     metadata_file = standardized_file.parent.joinpath(
-                f"{sr.file_meta_data.stem}.normalized.meta"
-            )    
+        f"{sr.file_meta_data.stem}.normalized.meta"
+    )
     if not folder.exists():
         # If it doesn't exist, create it later
         pass
@@ -517,7 +521,7 @@ def download_IBL(pid, save_folder, t_window=[0, 500], overwrite=True):
     rec = si.interpolate_bad_channels(rec, bad_channel_ids)
     rec = si.highpass_spatial_filter(rec)
     rec = si.zscore(rec, num_chunks_per_segment=50, mode="mean+std")
-    
+
     rec = rec.save(folder=save_folder, n_jobs=5, chunk_duration="1s")
     print("done preprocessing")
     # also copy the companion meta-data file
@@ -526,6 +530,7 @@ def download_IBL(pid, save_folder, t_window=[0, 500], overwrite=True):
         metadata_file,
     )
     return rec, metadata_file
+
 
 def extract_IBL(
     rec, meta_fp, pid, t_window=[0, 1100], use_labels=True, sampling_frequency=30_000
@@ -554,7 +559,9 @@ def extract_IBL(
     channel_index: numpy.ndarray
     templates: numpy.ndarray
     """
-    assert type(rec) == si.binaryfolder.BinaryFolderRecording, "rec must be a BinaryFolderRecording"
+    assert (
+        type(rec) == si.binaryfolder.BinaryFolderRecording
+    ), "rec must be a BinaryFolderRecording"
     one = ONE()
     ba = AllenAtlas()
 
@@ -564,7 +571,7 @@ def extract_IBL(
 
     # Read in the spike train and geometry information
     geom = read_geom_from_meta(meta_fp)
-    
+
     spike_times = spikes["times"]
     spike_frames = sl.samples2times(spike_times, direction="reverse").astype("int")
     spike_train = np.concatenate(
@@ -576,18 +583,18 @@ def extract_IBL(
     )[0]
     spike_train = spike_train[in_rec_idxs, :]
     spike_train[:, 0] = spike_train[:, 0] - t_window[0] * sampling_frequency
-    
+
     # Create channel index
     channel_index = make_contiguous_channel_index(geom.shape[0], n_neighbors=40)
-    
+
     closest_channel_list = []
     for cluster_id in spikes["clusters"]:
         closest_channel = clusters["channels"][cluster_id]
         closest_channel_list.append(closest_channel)
     closest_channels = np.asarray(closest_channel_list)
     closest_channels = closest_channels[in_rec_idxs]
-    
-    bin_fp = rec._bin_kwargs['file_paths'][0]
+
+    bin_fp = rec._bin_kwargs["file_paths"][0]
 
     # Align the spike train and get templates for each putative neural unit
     (
@@ -606,8 +613,7 @@ def extract_IBL(
         reducer=np.median,
         do_temporal_decrease=False,
     )
-    
-    
+
     mcs = np.array(
         [templates[unit_id].ptp(0).argmax(0) for unit_id in range(len(templates))]
     )
@@ -739,11 +745,13 @@ def all_units_except(spike_index, exclude_units):
     exclude_units: list
         list of units to exclude
     """
-    assert spike_index.shape[0] == 3, "Spike Index has insufficient rows. \
+    assert (
+        spike_index.shape[0] == 3
+    ), "Spike Index has insufficient rows. \
             Function requires spike times, max channels, and putative unit. Please rerun extract_IBL function with labels \
             or include all information requested in spike index."
     exclude_units = np.array(exclude_units)
-    unit_ids =np.sort(np.unique(spike_index[2, :]))
+    unit_ids = np.sort(np.unique(spike_index[2, :]))
     return np.setdiff1d(unit_ids, exclude_units)
 
 
@@ -780,11 +788,11 @@ def combine_datasets(data_folder_list, save_folder):
                 combined_data = np.vstack(data_list)
             np.save(os.path.join(save_folder, file + split), combined_data)
     # add spatial and temporal covariances to separate folders
-    covariances_dir = save_folder + '/covariances'
+    covariances_dir = save_folder + "/covariances"
     if not os.path.exists(covariances_dir):
         os.makedirs(covariances_dir)
     for i, data_folder in enumerate(data_folder_list):
-        covariances_dir_curr = data_folder + '/covariances'
+        covariances_dir_curr = data_folder + "/covariances"
         temporal_cov = np.load(
             os.path.join(covariances_dir_curr, "temporal_cov.npy"), allow_pickle=True
         )
@@ -797,9 +805,7 @@ def combine_datasets(data_folder_list, save_folder):
             )
             np.save(os.path.join(covariances_dir, f"spatial_cov_{i}.npy"), spatial_cov)
         else:
-            np.save(
-                os.path.join(covariances_dir, f"temporal_cov.npy"), temporal_cov
-            )
+            np.save(os.path.join(covariances_dir, f"temporal_cov.npy"), temporal_cov)
             np.save(os.path.join(covariances_dir, f"spatial_cov.npy"), spatial_cov)
 
 
@@ -870,7 +876,9 @@ def make_dataset(
     random_seed: int
         random seed for waveform extraction
     """
-    assert type(rec) == si.binaryfolder.BinaryFolderRecording, "rec must be a BinaryFolderRecording"
+    assert (
+        type(rec) == si.binaryfolder.BinaryFolderRecording
+    ), "rec must be a BinaryFolderRecording"
     np.random.seed(random_seed)
     num_waveforms = train_num + val_num + test_num
     spikes_array = []
@@ -897,9 +905,9 @@ def make_dataset(
 
     if not os.path.exists(save_path):
         os.makedirs(save_path)
-    
+
     if not inference:
-        covariance_path = save_path + '/covariances'
+        covariance_path = save_path + "/covariances"
         if not os.path.exists(covariance_path):
             os.makedirs(covariance_path)
         if save_covs:
@@ -912,15 +920,17 @@ def make_dataset(
             print(
                 f"copying over noise covariances from previous recording from {dir_path}/noise_covariances_IBL_dy016"
             )
-            spatial_cov = np.load(dir_path + "/noise_covariances_IBL_dy016/spatial_cov.npy")
+            spatial_cov = np.load(
+                dir_path + "/noise_covariances_IBL_dy016/spatial_cov.npy"
+            )
             temporal_cov = np.load(
                 dir_path + "/noise_covariances_IBL_dy016/temporal_cov.npy"
             )
             np.save(os.path.join(covariance_path, "spatial_cov.npy"), spatial_cov)
             np.save(os.path.join(covariance_path, "temporal_cov.npy"), temporal_cov)
-    bin_path = rec._bin_kwargs['file_paths'][0]
+    bin_path = rec._bin_kwargs["file_paths"][0]
 
-    #for the extracted spikes dataset
+    # for the extracted spikes dataset
     if extracted_spikes:
         data_chunks = chunk_data(spike_index, max_proc_len)
         if spike_index.shape[0] == 3:
@@ -951,10 +961,14 @@ def make_dataset(
                 geom_locs_array.append(crop_geom)
                 max_chan_array.append(crop_chan)
     else:
-        assert spike_index.shape[0] == 3, "Spike Index has insufficient rows. \
+        assert (
+            spike_index.shape[0] == 3
+        ), "Spike Index has insufficient rows. \
             Function requires spike times, max channels, and putative unit. Please rerun extract_IBL function with labels \
             or include all information requested in spike index."
-        unit_ids = unit_ids if unit_ids is not None else np.sort(np.unique(spike_index[2, :]))
+        unit_ids = (
+            unit_ids if unit_ids is not None else np.sort(np.unique(spike_index[2, :]))
+        )
 
         spike_index = spike_index.T
         for k, unit_id in tqdm(enumerate(unit_ids)):
@@ -1036,7 +1050,12 @@ def make_dataset(
                     else geom[mc_start:mc_end]
                 )
                 crop_wf, crop_chan, crop_geom, mask = pad_channels(
-                    curr_wf, curr_geom, mc_start, mc_end, num_chans_extract, spike_length_samples=spike_length_to_extract,
+                    curr_wf,
+                    curr_geom,
+                    mc_start,
+                    mc_end,
+                    num_chans_extract,
+                    spike_length_samples=spike_length_to_extract,
                 )
 
                 shifted_wf = shift_wf(crop_wf) if shift else crop_wf
