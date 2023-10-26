@@ -281,7 +281,7 @@ class ContrastiveLearningDataset:
             "crop_shift": 0.4,
             "amp_jitter": 0.5,
             "temporal_jitter": 0.7,
-            "smart_noise": 0.6,
+            "smart_noise": (0.6, 1.0),
         },
     ):
         """Return a set of data augmentation transformations on waveforms."""
@@ -322,7 +322,7 @@ class ContrastiveLearningDataset:
             "crop_shift": 0.4,
             "amp_jitter": 0.5,
             "temporal_jitter": 0.7,
-            "smart_noise": 0.6,
+            "smart_noise": (0.6, 1.0),
         },
     ):
         if self.multi_chan:
