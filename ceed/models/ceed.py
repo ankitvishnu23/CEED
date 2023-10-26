@@ -107,7 +107,7 @@ class CEED(object):
             "crop_shift": 0.4,
             "amp_jitter": 0.5,
             "temporal_jitter": 0.7,
-            "smart_noise": 0.6,
+            "smart_noise": (0.6, 1.0),
         },
         cell_type: bool = False,
         save_metrics: bool = False,
@@ -326,12 +326,13 @@ class CEED(object):
             disable_cuda=False,
             temperature=0.07,
             arch=self.arch,
-            noise_scale=1.0,
+            noise_scale=aug_p_dict["smart_noise"][1],
             cell_type=cell_type,
             gpu=gpu,
             aug_p_dict=aug_p_dict,
         )
         print(aug_p_dict)
+        print(aug_p_dict["smart_noise"][1])
 
         print("starting training...")
         simclr = SimCLR(

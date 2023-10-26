@@ -48,7 +48,7 @@ class SimCLR(object):
             noise_scale=self.args.noise_scale,
             normalize=self.args.cell_type,
             gpu=self.gpu,
-            p=self.args.aug_p_dict["smart_noise"],
+            p=self.args.aug_p_dict["smart_noise"][0],
         )
 
     def info_nce_loss(self, features):

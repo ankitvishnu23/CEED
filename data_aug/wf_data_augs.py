@@ -475,7 +475,7 @@ class Crop(object):
         self.prob = prob
         self.num_extra_chans = num_extra_chans
         self.ignore_chan_num = ignore_chan_num
-
+        print("less shift")
     def __call__(self, sample):
         if len(sample) == 3:
             wf, chan_nums, chan_locs = sample
@@ -496,6 +496,7 @@ class Crop(object):
         apply = np.random.binomial(1, self.prob)
         if apply:
             shift = np.random.randint(-self.num_extra_chans, self.num_extra_chans + 1)
+            #shift = np.random.randint(-self.num_extra_chans//2, self.num_extra_chans//2 + 1)
             max_chan_ind += shift
         wf = wf[
             max_chan_ind

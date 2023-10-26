@@ -151,7 +151,7 @@ def avg_score(
         acc = {}
         acc["score"] = accuracy_score(pred_labels, labels_test) * 100
     elif mod_type == "gmm":
-        if model_params["n_clusters"] is None:
+        if "n_clusters" not in model_params:
             model_params["n_clusters"] = num_classes
         pred_labels, bic_scores_test, bic_scores_train = GMM(
             train_reps, test_reps, n_clusters=model_params["n_clusters"]
