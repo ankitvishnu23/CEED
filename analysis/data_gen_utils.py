@@ -465,7 +465,7 @@ def save_real_covs(
     np.save(os.path.join(save_path, "temporal_cov.npy"), temporal_cov)
 
 
-def download_IBL(pid, save_folder, t_window=[0, 500], overwrite=True):
+def download_IBL(pid, save_folder, cache_folder=None, t_window=[0, 500], overwrite=True):
     """Extract and format data from a specific IBL session.
     Parameters
     ----------
@@ -488,24 +488,26 @@ def download_IBL(pid, save_folder, t_window=[0, 500], overwrite=True):
     eid, probe = one.pid2eid(pid)
     band = "ap"  # either 'ap' or 'lf'
     # Use IBL streamer to download the data
-    sr = Streamer(pid=pid, one=one, cache_folder=save_folder + '/cache', remove_cached=overwrite, typ=band)
+    sr = Streamer(pid=pid, one=one, cache_folder=cache_folder, remove_cached=overwrite, typ=band)
     sr._download_raw_partial(first_chunk=t_window[0], last_chunk=t_window[1] - 1)
     sr.file_bin = sr.target_dir / "_spikeglx_ephysData_g0_t0.imec0.ap.stream.cbin"
     binary = Path(sr.file_bin)
     folder = Path(save_folder)
     processed_path = folder / 'binary.json'
-    print(processed_path)
     standardized_file = folder / f"{binary.stem}.normalized.bin"
     metadata_file = standardized_file.parent.joinpath(
         f"{sr.file_meta_data.stem}.normalized.meta"
     )
-    if not processed_path.exists():
-        # If it doesn't exist, create it later
-        pass
-    else:
-        if overwrite:
+    if overwrite:
+        if folder.exists():
             shutil.rmtree(folder)
             print(f"Folder '{folder}' overwritten.")
+    else:
+        if not folder.exists():
+            # If it doesn't exist, create it later
+            pass
+        elif not processed_path.exists():
+            raise AssertionError('save folder exists but does not have the binary file. set overwrite=True')
         else:
             print(
                 str(processed_path)
