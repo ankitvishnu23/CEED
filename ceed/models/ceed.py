@@ -112,8 +112,8 @@ class CEED(object):
         cell_type: bool = False,
         save_metrics: bool = False,
         use_chan_pos: bool = False,
-        n_test_units: int = 10,
-        test_units_list: list = None,
+        n_units: int = 10,
+        units_list: list = None,
     ):
         """Trains a CEED model with the MLP backbone
 
@@ -146,14 +146,14 @@ class CEED(object):
             Whether to run CEED on a test/val set after every epoch and chart performance.
         use_chan_pos : bool
             Whether to use channel location data (x, y on probe) to train CEED.
-        n_test_units : int
-            The number of units to subselect from the test set and compute metrics on.
-        test_units_list : list
-            (Optional) List of units to select from the test set and on which to compute metrics.
+        n_units : int
+            The number of units to subselect from the dataset and compute metrics on.
+        units_list : list
+            (Optional) List of units to select from the dataset and on which to compute metrics.
         """
 
-        if test_units_list is not None:
-            n_test_units = len(test_units_list)
+        if units_list is not None:
+            n_units = len(units_list)
 
         checkpoint_dir = os.path.join(ckpt_dir, exp_name, "test")
         log_dir = os.path.join(log_dir, exp_name, "test")
@@ -192,8 +192,8 @@ class CEED(object):
                     prob=0.0, num_extra_chans=self.num_extra_chans, ignore_chan_num=True
                 ),
                 use_chan_pos=use_chan_pos,
-                n_test_units=n_test_units,
-                test_units_list=test_units_list,
+                n_units=n_units,
+                tests_list=test_list,
             )
             memory_loader = torch.utils.data.DataLoader(
                 memory_dataset,
@@ -211,8 +211,8 @@ class CEED(object):
                     prob=0.0, num_extra_chans=self.num_extra_chans, ignore_chan_num=True
                 ),
                 use_chan_pos=use_chan_pos,
-                n_test_units=n_test_units,
-                test_units_list=test_units_list,
+                n_units=n_units,
+                units_list=units_list,
             )
             test_loader = torch.utils.data.DataLoader(
                 test_dataset,
@@ -227,8 +227,8 @@ class CEED(object):
                 data_dir,
                 split="train",
                 multi_chan=False,
-                n_test_units=n_test_units,
-                test_units_list=test_units_list,
+                n_units=n_units,
+                units_list=units_list,
             )
             memory_loader = torch.utils.data.DataLoader(
                 memory_dataset,
@@ -243,8 +243,8 @@ class CEED(object):
                 data_dir,
                 split="test",
                 multi_chan=False,
-                n_test_units=n_test_units,
-                test_units_list=test_units_list,
+                n_units=n_units,
+                units_list=units_list,
             )
             test_loader = torch.utils.data.DataLoader(
                 test_dataset,
@@ -363,18 +363,24 @@ class CEED(object):
         else:
             self.model.backbone.load(ckpt)
 
-    def load_and_transform(self, data_dir, use_chan_pos=False, file_split="test"):
+    def load_and_transform(self, data_dir, units_list=None, use_chan_pos=False, file_split="test"):
         """Load a spike dataset from a folder and transform the data
 
         Parameters
         ----------
         data_dir : str
             The absolute path location from which neural ephys data will be loaded into CEED to obtain representations.
+        units: list
+            List of unit ids to load and transform. If None, then all units will be loaded and transformed.
         use_chan_pos: bool
             Whether channel locations (x, y on the probe) will be used to obtain representations (only if CEED model was trained using channel locations).
         file_split: str
             Which data split to transform - 'test', 'val', or 'train'. Will look for corresponding spikes file.
         """
+        if units_list is None:
+            n_units = -1 #load and transform all units
+        else:
+            n_units = len(units_list)
         if self.multi_chan:
             dataset = WFDataset_lab(
                 data_dir,
@@ -384,6 +390,8 @@ class CEED(object):
                     prob=0.0, num_extra_chans=self.num_extra_chans, ignore_chan_num=True
                 ),
                 use_chan_pos=use_chan_pos,
+                n_units=n_units,
+                units_list=units_list,
             )
             loader = torch.utils.data.DataLoader(
                 dataset,
@@ -394,7 +402,12 @@ class CEED(object):
                 drop_last=False,
             )
         else:
-            dataset = WFDataset_lab(data_dir, split=file_split, multi_chan=False)
+            dataset = WFDataset_lab(data_dir, 
+                                    split=file_split, 
+                                    multi_chan=False, 
+                                    n_units=n_units, 
+                                    units_list=units_list
+                                   )
             loader = torch.utils.data.DataLoader(
                 dataset,
                 batch_size=128,
