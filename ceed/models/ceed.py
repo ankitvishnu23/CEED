@@ -155,8 +155,8 @@ class CEED(object):
         if units_list is not None:
             n_units = len(units_list)
 
-        checkpoint_dir = os.path.join(ckpt_dir, exp_name, "test")
-        log_dir = os.path.join(log_dir, exp_name, "test")
+        checkpoint_dir = os.path.join(ckpt_dir, exp_name)
+        log_dir = os.path.join(log_dir, exp_name)
 
         os.makedirs(checkpoint_dir, exist_ok=True)
         os.makedirs(log_dir, exist_ok=True)
@@ -355,9 +355,9 @@ class CEED(object):
         ckpt_dir : str
             The absolute path location from which ckpt will be restored.
         """
-        checkpoint_dir = os.path.join(ckpt_dir, "test")
-        print("loading from previous checkpoint: ", checkpoint_dir)
-        ckpt = os.path.join(checkpoint_dir, "checkpoint.pth")
+        #checkpoint_dir = os.path.join(ckpt_dir, "test")
+        print("loading from previous checkpoint: ", ckpt_dir)
+        ckpt = os.path.join(ckpt_dir, "checkpoint.pth")
         if self.ddp:
             load_ckpt_to_model(self.model, ckpt, self.multi_chan)
         else:
