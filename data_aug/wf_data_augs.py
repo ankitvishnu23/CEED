@@ -14,7 +14,6 @@ warnings.filterwarnings("ignore")
 
 import glob
 
-
 class AmpJitter(object):
     """Rescales waveform amplitude by some small factor"""
 
@@ -211,8 +210,8 @@ class TorchSmartNoise(object):
         """
         self.root_folder = root_folder
         if temporal_cov is None or spatial_cov is None:
-            temporal_covs_files = glob.glob(root_folder + self.temporal_covs_path)
-            spatial_covs_files = glob.glob(root_folder + self.spatial_covs_path)
+            temporal_covs_files = glob.glob(str(root_folder) + self.temporal_covs_path)
+            spatial_covs_files = glob.glob(str(root_folder) + self.spatial_covs_path)
             spatial_temporal_covs = [
                 (spatial_covs_files[i], temporal_covs_files[i])
                 for i in range(len(temporal_covs_files))
@@ -252,7 +251,7 @@ class TorchSmartNoise(object):
             # wf, chan_nums, chan_locs = sample
         else:
             wf = sample
-
+        print("PROB: ", self.prob)
         if self.prob > torch.rand(1):
             if len(wf.shape) == 2:
                 wf = np.expand_dims(wf, axis=1)

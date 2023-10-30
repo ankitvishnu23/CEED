@@ -107,10 +107,7 @@ class SimCLR(object):
             if self.args.ddp:
                 self.sampler.set_epoch(epoch_counter)
             for i, (wf, chan_nums, lab) in enumerate(train_loader):
-                chan_pos = None
-                if self.args.use_chan_pos:
-                    wf, chan_pos = wf
-                    chan_pos = torch.cat(chan_pos, dim=0).float()
+                print(len(wf), len(wf[0]))
                 wf = torch.cat(wf, dim=0).float()
                 chan_nums = np.concatenate(chan_nums, axis=0)
                 lab = torch.cat(lab, dim=0).long().cuda(self.gpu, non_blocking=True)

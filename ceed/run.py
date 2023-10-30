@@ -9,15 +9,23 @@ import torch
 import torch.backends.cudnn as cudnn
 
 from torchvision import models
+
+sys.path.append('../')      
+sys.path.append('../..')    
+sys.path.append('.')         
+
 from data_aug.contrastive_learning_dataset import (
     ContrastiveLearningDataset,
     WFDataset_lab,
 )
+
+
 from data_aug.wf_data_augs import Crop
 from ceed.models.model_simclr import ModelSimCLR, Projector
 from ceed.simclr import SimCLR
-from ceed.models.model_GPT import GPTConfig, Single_GPT
+from ceed.models.model_SCAM import SCAMConfig, Multi_SCAM
 from torch.nn.parallel import DistributedDataParallel as DDP
+
 
 
 def main(args):
@@ -43,12 +51,17 @@ def main_worker(gpu, args):
     # torch.cuda.set_device(gpu)
     torch.backends.cudnn.benchmark = True
     # torch.backends.cudnn.deterministic = True
-
-    args.aug_p_dict = (
-        [0.4, 0.5, 0.7, 0.6, 0.5] if args.aug_p_dict is None else args.aug_p_dict
-    )
-    num_extra_chans = args.num_extra_chans if args.multi_chan else 0
-
+    if args.aug_p_dict is None:
+        args.aug_p_dict = {
+                "collide": 0.4,
+                "crop_shift": 0.4,
+                "amp_jitter": 0.5,
+                "temporal_jitter": 0.7,
+                "smart_noise": (0.6, 1.0),
+            }
+    # num_extra_chans = args.num_extra_chans if args.multi_chan else 0
+    args.multi_chan = True if args.num_extra_chans > 0 else False
+    num_extra_chans = args.num_extra_chans 
     dataset = ContrastiveLearningDataset(
         args.data, args.out_dim, multi_chan=args.multi_chan
     )
@@ -76,7 +89,7 @@ def main_worker(gpu, args):
             num_workers=args.workers,
             pin_memory=True,
             sampler=sampler,
-        )
+        ) 
     else:
         sampler = None
 
@@ -94,7 +107,7 @@ def main_worker(gpu, args):
         if args.multi_chan:
             memory_dataset = WFDataset_lab(
                 args.data,
-                split="val",
+                split="train",
                 multi_chan=args.multi_chan,
                 transform=Crop(
                     prob=0.0, num_extra_chans=num_extra_chans, ignore_chan_num=True
@@ -269,6 +282,9 @@ def main_worker(gpu, args):
         args=args,
         start_epoch=start_epoch,
     )
+    print(dir(simclr))
+    print(simclr.args)
+    print(simclr.args.multi_chan)
     simclr.train(train_loader, memory_loader, test_loader)
 
 
@@ -334,7 +350,7 @@ if __name__ == "__main__":
         "-a",
         "--arch",
         metavar="ARCH",
-        default="attention",
+        default="fc_encoder",
         help="default: custom_encoder)",
     )
     parser.add_argument(

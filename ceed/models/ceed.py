@@ -14,7 +14,7 @@ from ceed.models.model_simclr import ModelSimCLR
 from utils.utils import get_torch_reps, get_torch_reps_nolabels, apply_transform
 from utils.load_models import load_ckpt_to_model
 from ceed.simclr import SimCLR
-from ceed.models.model_GPT import GPTConfig, Single_GPT, Multi_GPT
+from ceed.models.model_SCAM import SCAMConfig, Multi_SCAM
 from torch.nn.parallel import DistributedDataParallel as DDP
 
 
@@ -47,7 +47,7 @@ class CEED(object):
         """
 
         self.multi_chan = True if num_extra_chans > 1 else False
-        self.ddp = True if model_arch == "gpt" else False
+        self.ddp = True if model_arch == "scam" else False
         self.out_dim = out_dim
         self.num_extra_chans = num_extra_chans
         self.arch = model_arch
@@ -57,7 +57,7 @@ class CEED(object):
         else:
             self.device = gpu
 
-        if self.arch == "gpt":
+        if self.arch == "scam":
             model_args = dict(
                 n_layer=20,
                 n_head=4,
@@ -67,17 +67,13 @@ class CEED(object):
                 vocab_size=50304,
                 dropout=0.0,
                 out_dim=out_dim,
-                is_causal=True,
                 proj_dim=proj_dim,
-                pos="seq_11times",
                 multi_chan=self.multi_chan,
                 num_classes=self.num_classes,
             )
-            gptconf = GPTConfig(**model_args)
-            if self.multi_chan:
-                self.model = Multi_GPT(gptconf)
-            else:
-                self.model = Single_GPT(gptconf)
+            scamconf = SCAMConfig(**model_args)
+            self.model = Multi_SCAM(scamconf)
+            
         else:
             self.model = ModelSimCLR(
                 base_model=self.arch,
@@ -344,6 +340,7 @@ class CEED(object):
             args=args,
             start_epoch=start_epoch,
         )
+        print(simclr.args)
         simclr.train(train_loader, memory_loader, test_loader)
 
     def load(self, ckpt_dir):

@@ -4,7 +4,7 @@ from data_aug.contrastive_learning_dataset import (
     ContrastiveLearningDataset,
     WFDataset_lab,
 )
-from ceed.models.model_GPT import GPTConfig, Multi_GPT, Single_GPT, Projector
+from ceed.models.model_SCAM import SCAMConfig, Multi_SCAM, Projector
 from data_aug.wf_data_augs import Crop
 import os
 
@@ -82,17 +82,12 @@ class Encoder(torch.nn.Module):
                 multi_chan=False,
                 num_classes=num_classes,
             )
-        gptconf = GPTConfig(**model_args)
-        if multi_chan:
-            self.backbone = Multi_GPT(gptconf)
-        else:
-            self.backbone = Single_GPT(gptconf)
-            self.backbone.projector = (
-                torch.nn.Identity()
-            )  # this is loaded separately later
+        scamconf = SCAMConfig(**model_args)
+        self.backbone = Multi_SCAM(scamconf)
+        
         if rep_after_proj:
             self.projector = Projector(
-                rep_dim=gptconf.out_dim, proj_dim=gptconf.proj_dim
+                rep_dim=scamconf.out_dim, proj_dim=scamconf.proj_dim
             )
         else:
             self.projector = None

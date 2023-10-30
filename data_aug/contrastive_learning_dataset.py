@@ -45,7 +45,7 @@ class WFDataset(Dataset):
         self.max_chans = np.load(os.path.join(root, self.spike_mcs_fn))
         self.transform = transform
         self.detected_spikes = detected_spikes
-
+        
         # If we do not have label information / if dataset is created without labels
         if detected_spikes:
             self.targets = None
@@ -82,7 +82,7 @@ class WFDataset(Dataset):
         if self.use_chan_pos:
             return [wf, chan_loc], y
 
-        return wf, y
+        return wf, mc, y
 
     def __len__(self) -> int:
         return len(self.data)
@@ -259,7 +259,7 @@ class WFDataset_lab(Dataset):
         if self.use_chan_pos:
             return [wf, chan_loc], y
 
-        return wf, y
+        return wf, chan_nums, y
 
     def __len__(self) -> int:
         return len(self.data)

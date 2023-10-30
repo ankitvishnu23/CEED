@@ -99,7 +99,7 @@ def get_torch_reps(net, data_loader, device, args):
     feature_labels = torch.tensor([])
     with torch.no_grad():
         # generate feature bank
-        for data, target in data_loader:
+        for data, _, target in data_loader:
             if args.use_chan_pos:
                 data, chan_pos = data
             else:
@@ -295,7 +295,7 @@ def knn_monitor(
     total_top1, total_top5, total_num, feature_bank = 0.0, 0.0, 0, []
     with torch.no_grad():
         # generate feature bank
-        for data, target in memory_data_loader:
+        for data, _, target in memory_data_loader:
             if not args.multi_chan:
                 if args.use_gpt:
                     data = torch.squeeze(data, dim=1)
@@ -323,7 +323,7 @@ def knn_monitor(
         feature_labels = torch.tensor(targets, device=feature_bank.device)
 
         # loop test data to predict the label by weighted knn search
-        for data, target in test_data_loader:
+        for data, _, target in test_data_loader:
             target = target.to(device=device, non_blocking=True)
             if not args.multi_chan:
                 data = torch.squeeze(data, dim=1)
