@@ -182,8 +182,8 @@ class WFDataset_lab(Dataset):
         multi_chan: bool = False,
         split: str = "train",
         transform: Optional[Callable] = None,
-        n_test_units: int = 10,
-        test_units_list: list = None,
+        n_units: int = 10,
+        units_list: list = None,
     ) -> None:
         super().__init__()
         if split == "train":
@@ -203,36 +203,35 @@ class WFDataset_lab(Dataset):
             self.chan_nums = np.load(os.path.join(root, self.spike_mcs_val_fn))
             self.channel_locs = np.load(os.path.join(root, self.chan_coords_val_fn))
 
-        # select a subset of the test units for quicker inference during test time
-        np.random.seed(0)
-        test_units = (
-            np.sort(test_units_list)
-            if test_units_list is not None
-            else np.sort(
-                np.random.choice(np.unique(self.targets), n_test_units, replace=False)
+        if n_units != -1:
+            # select a subset of the units for quicker inference during time
+            np.random.seed(0)
+            units = (
+                np.sort(units_list)
+                if units_list is not None
+                else np.sort(
+                    np.random.choice(np.unique(self.targets), n_units, replace=False)
+                )
             )
-        )
-        print(f"Testing units: {test_units}")
-        unique_labels = np.unique(self.targets)
-        bad_units = np.array([unit for unit in test_units if unit not in unique_labels])
-        assert (
-            len(bad_units) == 0
-        ), "Units {} are not in the test set, please retry without these test units.".format(
-            bad_units
-        )
-
-        num_units = len(test_units)
-        test_units_dict = dict(zip(test_units, np.arange(num_units)))
-        test_unit_idxs = np.array(
-            [idx for idx, unit in enumerate(self.targets) if unit in test_units]
-        )
-
-        self.data = self.data[test_unit_idxs]
-        self.targets = np.array(
-            [test_units_dict[unit] for unit in self.targets if unit in test_units]
-        )
-        self.chan_nums = self.chan_nums[test_unit_idxs]
-        self.channel_locs = self.channel_locs[test_unit_idxs]
+            print(f"Units: {n_units}")
+            unique_labels = np.unique(self.targets)
+            bad_units = np.array([unit for unit in units if unit not in unique_labels])
+            assert (
+                len(bad_units) == 0
+            ), "Units {} are not in the dataset, please retry without these units.".format(
+                bad_units
+            )
+            num_units = len(units)
+            units_dict = dict(zip(units, np.arange(num_units)))
+            unit_idxs = np.array(
+                [idx for idx, unit in enumerate(self.targets) if unit in units]
+            )
+            self.data = self.data[unit_idxs]
+            self.targets = np.array(
+                [units_dict[unit] for unit in self.targets if unit in units]
+            )
+            self.chan_nums = self.chan_nums[unit_idxs]
+            self.channel_locs = self.channel_locs[unit_idxs]
 
         self.root = root
         self.transform = transform
@@ -281,7 +280,7 @@ class ContrastiveLearningDataset:
             "crop_shift": 0.4,
             "amp_jitter": 0.5,
             "temporal_jitter": 0.7,
-            "smart_noise": 0.6,
+            "smart_noise": (0.6, 1.0),
         },
     ):
         """Return a set of data augmentation transformations on waveforms."""
@@ -322,7 +321,7 @@ class ContrastiveLearningDataset:
             "crop_shift": 0.4,
             "amp_jitter": 0.5,
             "temporal_jitter": 0.7,
-            "smart_noise": 0.6,
+            "smart_noise": (0.6, 1.0),
         },
     ):
         if self.multi_chan:
