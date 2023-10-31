@@ -2,11 +2,11 @@ import torch
 import numpy as np
 import torch.distributed as dist
 
-# from classy_vision.generic.distributed_util import (
-#     convert_to_distributed_tensor,
-#     convert_to_normal_tensor,
-#     is_distributed_training_run,
-# )
+from classy_vision.generic.distributed_util import (
+    convert_to_distributed_tensor,
+    convert_to_normal_tensor,
+    is_distributed_training_run,
+)
 import random
 from PIL import Image, ImageOps, ImageFilter
 import torch.nn.functional as F

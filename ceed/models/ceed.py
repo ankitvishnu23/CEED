@@ -107,7 +107,6 @@ class CEED(object):
         },
         cell_type: bool = False,
         save_metrics: bool = False,
-        use_chan_pos: bool = False,
         n_units: int = 10,
         units_list: list = None,
     ):
@@ -140,8 +139,6 @@ class CEED(object):
             Whether to normalize data for use in training a CEED cell type classification model.
         save_metrics : bool
             Whether to run CEED on a test/val set after every epoch and chart performance.
-        use_chan_pos : bool
-            Whether to use channel location data (x, y on probe) to train CEED.
         n_units : int
             The number of units to subselect from the dataset and compute metrics on.
         units_list : list
@@ -187,9 +184,8 @@ class CEED(object):
                 transform=Crop(
                     prob=0.0, num_extra_chans=self.num_extra_chans, ignore_chan_num=True
                 ),
-                use_chan_pos=use_chan_pos,
                 n_units=n_units,
-                tests_list=test_list,
+                units_list=units_list,
             )
             memory_loader = torch.utils.data.DataLoader(
                 memory_dataset,
@@ -206,7 +202,6 @@ class CEED(object):
                 transform=Crop(
                     prob=0.0, num_extra_chans=self.num_extra_chans, ignore_chan_num=True
                 ),
-                use_chan_pos=use_chan_pos,
                 n_units=n_units,
                 units_list=units_list,
             )
@@ -312,7 +307,6 @@ class CEED(object):
             fp16=True,
             epochs=epochs,
             add_train=True,
-            use_chan_pos=use_chan_pos,
             use_gpt=self.ddp,
             online_head=False,
             eval_knn_every_n_epochs=1,
@@ -341,7 +335,6 @@ class CEED(object):
             args=args,
             start_epoch=start_epoch,
         )
-        print(simclr.args)
         simclr.train(train_loader, memory_loader, test_loader)
 
     def load(self, ckpt_dir):
@@ -360,7 +353,7 @@ class CEED(object):
         else:
             self.model.backbone.load(ckpt)
 
-    def load_and_transform(self, data_dir, units_list=None, use_chan_pos=False, file_split="test"):
+    def load_and_transform(self, data_dir, units_list=None, file_split="test"):
         """Load a spike dataset from a folder and transform the data
 
         Parameters
@@ -369,8 +362,6 @@ class CEED(object):
             The absolute path location from which neural ephys data will be loaded into CEED to obtain representations.
         units: list
             List of unit ids to load and transform. If None, then all units will be loaded and transformed.
-        use_chan_pos: bool
-            Whether channel locations (x, y on the probe) will be used to obtain representations (only if CEED model was trained using channel locations).
         file_split: str
             Which data split to transform - 'test', 'val', or 'train'. Will look for corresponding spikes file.
         """
@@ -386,7 +377,6 @@ class CEED(object):
                 transform=Crop(
                     prob=0.0, num_extra_chans=self.num_extra_chans, ignore_chan_num=True
                 ),
-                use_chan_pos=use_chan_pos,
                 n_units=n_units,
                 units_list=units_list,
             )
@@ -418,7 +408,6 @@ class CEED(object):
             ddp=False,
             rank=0,
             multi_chan=self.multi_chan,
-            use_chan_pos=use_chan_pos,
             use_gpt=self.ddp,
             num_extra_chans=self.num_extra_chans,
         )
@@ -453,7 +442,6 @@ class CEED(object):
             ddp=False,
             rank=0,
             multi_chan=self.multi_chan,
-            use_chan_pos=False,
             use_gpt=self.ddp,
             num_extra_chans=self.num_extra_chans,
         )

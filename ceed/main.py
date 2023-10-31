@@ -72,15 +72,7 @@ def main_worker(gpu, args):
             model, device_ids=[gpu], find_unused_parameters=True
         )
 
-    if args.optimizer == "sgd":
-        optimizer = torch.optim.SGD(
-            model.parameters(),
-            lr=0,
-            momentum=args.opt_momentum,
-            weight_decay=args.weight_decay,
-        )
-    elif args.optimizer == "adam":
-        optimizer = torch.optim.Adam(
+    optimizer = torch.optim.Adam(
             model.parameters(), args.learning_rate, weight_decay=args.weight_decay
         )
 
@@ -94,17 +86,16 @@ def main_worker(gpu, args):
     else:
         start_epoch = 0
     
-    if args.aug_p_dict is None:    
-        args.aug_p_dict: dict = {
-            "collide": 0.4,
-            "crop_shift": 0.4,
-            "amp_jitter": 0.5,
-            "temporal_jitter": 0.7,
-            "smart_noise": (0.6, 1.0),
-        },
-    # num_extra_chans = args.num_extra_chans if args.multi_chan else 0
+    if args.aug_p_dict is None:
+        args.aug_p_dict = {
+                "collide": 0.4,
+                "crop_shift": 0.4,
+                "amp_jitter": 0.5,
+                "temporal_jitter": 0.7,
+                "smart_noise": (0.6, 1.0),
+            }
     args.multi_chan = True if args.num_extra_chans > 0 else False
-    num_extra_chans = args.num_extra_chans 
+    
     ds = ContrastiveLearningDataset(
         args.data,
         args.out_dim,
@@ -113,7 +104,7 @@ def main_worker(gpu, args):
     train_dataset = ds.get_dataset(
         args.dataset_name,
         2,
-        num_extra_chans,
+        args.num_extra_chans,
         detected_spikes=args.detected_spikes,
         aug_p_dict=args.aug_p_dict
     )
@@ -142,17 +133,17 @@ def main_worker(gpu, args):
         )
 
     # define memory and test dataset for knn monitoring
-    if args.rank == 0 and not args.no_knn:
+    if args.rank == 0 and not args.no_eval:
         if args.multi_chan:
             memory_dataset = WFDataset_lab(
                 args.data,
-                split="val",
+                split="train",
                 multi_chan=args.multi_chan,
                 transform=Crop(
-                    prob=0.0, num_extra_chans=num_extra_chans, ignore_chan_num=True
+                    prob=0.0, num_extra_chans=args.num_extra_chans, ignore_chan_num=True
                 ),
-                n_test_units=args.n_test_units,
-                test_units_list=args.test_units_list,
+                n_units=args.n_test_units,
+                units_list=args.test_units_list,
             )
             memory_loader = torch.utils.data.DataLoader(
                 memory_dataset,
@@ -167,10 +158,10 @@ def main_worker(gpu, args):
                 split="test",
                 multi_chan=args.multi_chan,
                 transform=Crop(
-                    prob=0.0, num_extra_chans=num_extra_chans, ignore_chan_num=True
+                    prob=0.0, num_extra_chans=args.num_extra_chans, ignore_chan_num=True
                 ),
-                n_test_units=args.n_test_units,
-                test_units_list=args.test_units_list,
+                n_units=args.n_test_units,
+                units_list=args.test_units_list,
             )
             test_loader = torch.utils.data.DataLoader(
                 test_dataset,
@@ -185,8 +176,8 @@ def main_worker(gpu, args):
                 args.data,
                 split="train",
                 multi_chan=False,
-                n_test_units=args.n_test_units,
-                test_units_list=args.test_units_list,
+                n_units=args.n_test_units,
+                units_list=args.test_units_list,
             )
             memory_loader = torch.utils.data.DataLoader(
                 memory_dataset,
@@ -200,8 +191,8 @@ def main_worker(gpu, args):
                 args.data,
                 split="test",
                 multi_chan=False,
-                n_test_units=args.n_test_units,
-                test_units_list=args.test_units_list,
+                n_units=args.n_test_units,
+                units_list=args.test_units_list,
             )
             test_loader = torch.utils.data.DataLoader(
                 test_dataset,
@@ -220,10 +211,10 @@ def main_worker(gpu, args):
 
     noise_transform = TorchSmartNoise(
             args.data,
-            noise_scale=args.noise_scale,
+            noise_scale=args.aug_p_dict["smart_noise"][1],
             normalize=args.cell_type,
             gpu=gpu,
-            p=args.aug_p_dict["smart_noise"],
+            p=args.aug_p_dict["smart_noise"][0],
         )
     
     for epoch in range(start_epoch, args.epochs):
@@ -234,49 +225,28 @@ def main_worker(gpu, args):
         for step, (wf, chan_nums, lab) in enumerate(train_loader, start=epoch * len(train_loader)):
             wf = torch.cat(wf, dim=0).float()
             chan_nums = np.concatenate(chan_nums, axis=0)
-            wf = noise_transform([wf, chan_nums])  # smart_noise on GPU
             
-            y1 = wf[0].float()
-            y2 = wf[1].float()
+            wf = wf.cuda(gpu, non_blocking=True)
+            wf = noise_transform([wf, chan_nums])  # smart_noise on GPU
 
-            if not args.multi_chan:
-                y1, y2 = torch.squeeze(y1, dim=1), torch.squeeze(y2, dim=1)
-                y1, y2 = torch.unsqueeze(y1, dim=-1), torch.unsqueeze(y2, dim=-1)
-            else:
-                y1, y2 = y1.view(-1, (args.num_extra_chans * 2 + 1) * 121), y2.view(
-                    -1, (args.num_extra_chans * 2 + 1) * 121
-                )
-                y1, y2 = torch.unsqueeze(y1, dim=-1), torch.unsqueeze(y2, dim=-1)
-            y1 = y1.cuda(gpu, non_blocking=True)
-            y2 = y2.cuda(gpu, non_blocking=True)
+            if args.arch == 'scam':
+                if not args.multi_chan:
+                    wf = torch.squeeze(wf, dim=1)
+                    wf = torch.unsqueeze(wf, dim=-1)
+                else:
+                    wf = wf.view(-1, (args.num_extra_chans * 2 + 1) * 121)
+                    wf = torch.unsqueeze(wf, dim=-1)
 
-            if args.optimizer != "adam":
-                lr = adjust_learning_rate(args, optimizer, train_loader, step)
-            else:
-                lr = args.learning_rate
+            lr = args.learning_rate
             optimizer.zero_grad(set_to_none=True)
             
             with torch.cuda.amp.autocast():
-                loss = model.forward(y1, y2)
+                y1, y2 = torch.chunk(wf, 2, dim=0)
+                loss = model.forward(y1,y2)
 
             scaler.scale(loss).backward()
             scaler.step(optimizer)
             scaler.update()
-
-            if step % args.print_freq == 0:
-                if args.rank == 0:
-                    print(
-                        f"epoch={epoch}, step={step}, loss={loss.item()}, time={int(time.time() - start_time)}",
-                        flush=True,
-                    )
-                    stats = dict(
-                        epoch=epoch,
-                        step=step,
-                        learning_rate=lr,
-                        loss=loss.item(),
-                        time=int(time.time() - start_time),
-                    )
-                    print(json.dumps(stats), file=stats_file)
 
         if args.rank == 0:
             # save checkpoint
@@ -292,30 +262,27 @@ def main_worker(gpu, args):
                 torch.save(
                     state, args.checkpoint_dir / "checkpoint_epoch{}.pth".format(epoch)
                 )
-
-            if epoch % 50 == 0 and not args.no_knn:
-                save_reps(
-                    model,
-                    memory_loader,
-                    args.checkpoint_dir / "checkpoint.pth",
-                    split="train",
-                    multi_chan=True,
-                    rep_after_proj=False
-                )
-                save_reps(
-                    model,
-                    test_loader,
-                    args.checkpoint_dir / "checkpoint.pth",
-                    split="test",
-                    multi_chan=True,
-                    rep_after_proj=False
-                )
+                if not args.no_eval:
+                    save_reps(
+                        model,
+                        memory_loader,
+                        args.checkpoint_dir / "checkpoint.pth",
+                        split="train",
+                        multi_chan=True
+                    )
+                    save_reps(
+                        model,
+                        test_loader,
+                        args.checkpoint_dir / "checkpoint.pth",
+                        split="test",
+                        multi_chan=True
+                    )
 
             # log to tensorboard
             logger.log_value("loss", loss.item(), epoch)
             logger.log_value("learning_rate", lr, epoch)
 
-            if epoch % args.knn_freq == 0 and not args.no_knn:
+            if epoch % args.eval_freq == 0 and not args.no_eval:
                 knn_score = knn_monitor(
                     net=model,
                     memory_data_loader=memory_loader,
@@ -333,8 +300,7 @@ def main_worker(gpu, args):
                     hide_progress=True,
                     args=args,
                 )
-                print(f"Epoch {epoch}, my knn_acc:{knn_score}")
-                print(f"Epoch {epoch}, my gmm_acc:{gmm_score}")
+                print(f"Epoch {epoch}, knn_acc:{knn_score}, gmm_acc:{gmm_score}")
                 logger.log_value("knn_acc", knn_score, epoch)
                 logger.log_value("gmm_acc", gmm_score, epoch)
 
@@ -350,27 +316,12 @@ def main_worker(gpu, args):
         )
 
 
-def adjust_learning_rate(args, optimizer, loader, step):
-    max_steps = args.epochs * len(loader)
-    warmup_steps = 10 * len(loader)
-    base_lr = args.learning_rate  # * args.batch_size / 256
-    if step < warmup_steps:
-        lr = base_lr * step / warmup_steps
-    else:
-        step -= warmup_steps
-        max_steps -= warmup_steps
-        q = 0.5 * (1 + math.cos(math.pi * step / max_steps))
-        end_lr = base_lr * 0.001
-        lr = base_lr * q + end_lr * (1 - q)
-    for param_group in optimizer.param_groups:
-        param_group["lr"] = lr
-    return lr
-
 
 class SimCLR(nn.Module):
     def __init__(self, args):
         super().__init__()
-        num_extra_chans = args.num_extra_chans if args.multi_chan else 0
+        args.multi_chan = True if args.num_extra_chans > 0 else False
+        
         if args.arch == 'scam':
             model_args = dict(
                 n_layer=args.n_layer,
@@ -378,12 +329,11 @@ class SimCLR(nn.Module):
                 n_embd=args.n_embd,
                 block_size=args.block_size,
                 bias=args.bias,
-                vocab_size=args.vocab_size,
                 dropout=args.dropout,
                 out_dim=args.out_dim,
                 proj_dim=args.proj_dim,
                 multi_chan=args.multi_chan,
-                n_extra_chans=num_extra_chans,
+                n_extra_chans=args.num_extra_chans,
                 num_classes=args.num_classes,
             )
             scamconf = SCAMConfig(**model_args)
@@ -396,33 +346,32 @@ class SimCLR(nn.Module):
                 fc_depth=args.fc_depth,
                 expand_dim=args.expand_dim,
                 multichan=args.multi_chan,
-                input_size=(2 * num_extra_chans + 1) * 121,
+                input_size=(2 * args.num_extra_chans + 1) * 121,
             )
+            if not args.eval_on_proj:
+                self.backbone.backbone.proj = nn.Identity()
         self.args = args
 
         # projector
-        self.projector = Projector(rep_dim=args.out_dim, proj_dim=args.proj_dim)
+        if args.eval_on_proj:
+            self.projector = None
+        else:
+            self.projector = Projector(rep_dim=args.out_dim, proj_dim=args.proj_dim)
 
     def forward(self, y1, y2=None):
         if y2 is None:
-            r1 = self.backbone(y1)
-            return r1
-
-        r1 = self.backbone(y1)
-        r2 = self.backbone(y2)
-
-        # projoection
-        z1 = self.projector(r1)
-        z2 = self.projector(r2)
-
+            return self.backbone(y1)
+        z1 = self.backbone(y1)
+        z2 = self.backbone(y2)
+        
+        # projection
+        if self.projector is not None:
+            z1 = self.projector(z1)
+            z2 = self.projector(z2)
+        z1, z2 = torch.squeeze(z1), torch.squeeze(z2)
         loss = infoNCE(z1, z2) / 2 + infoNCE(z2, z1) / 2
         
         return loss
-
-
-def build_loss_fn(args):
-    return infoNCE
-
 
 def infoNCE(nn, p, temperature=0.2, gather_all=True):
     nn = torch.nn.functional.normalize(nn, dim=1)
@@ -436,10 +385,6 @@ def infoNCE(nn, p, temperature=0.2, gather_all=True):
     labels = torch.arange(0, n, dtype=torch.long).cuda()
     loss = torch.nn.functional.cross_entropy(logits, labels)
     return loss
-
-
-def exclude_bias_and_norm(p):
-    return p.ndim == 1
 
 
 def main(args):
@@ -459,7 +404,7 @@ if __name__ == "__main__":
         "--data",
         type=Path,
         metavar="DIR",
-        default="/gpfs/u/home/BNSS/BNSSlhch/scratch/spike_data/dy016",
+        default="./spike_data/dy016",
         help="path to dataset",
     )
     parser.add_argument(
@@ -496,22 +441,19 @@ if __name__ == "__main__":
         "--weight-decay", default=1e-6, type=float, metavar="W", help="weight decay"
     )
     parser.add_argument(
-        "--print-freq", default=10, type=int, metavar="N", help="print frequency"
-    )
-    parser.add_argument(
-        "--save-freq", default=10, type=int, metavar="N", help="save frequency"
+        "--save-freq", default=50, type=int, metavar="N", help="save frequency"
     )
     parser.add_argument(
         "--checkpoint-dir",
         type=Path,
-        default="/gpfs/u/home/BNSS/BNSSlhch/scratch/spike_ddp/saved_models_int/",
+        default="./saved_models/",
         metavar="DIR",
         help="path to checkpoint directory",
     )
     parser.add_argument(
         "--log-dir",
         type=Path,
-        default="/gpfs/u/home/BNSS/BNSSlhch/scratch/spike_ddp/logs_int/",
+        default="./logs/",
         metavar="LOGDIR",
         help="path to tensorboard log directory",
     )
@@ -522,16 +464,6 @@ if __name__ == "__main__":
         "--temp", default=0.2, type=float, help="Temperature for InfoNCE loss"
     )
 
-    parser.add_argument(
-        "--opt-momentum", default=0.9, type=float, help="Momentum for optimizer"
-    )
-    parser.add_argument(
-        "--optimizer",
-        default="adam",
-        type=str,
-        help="Optimizer",
-        choices=["sgd", "adam"],
-    )
 
     # Slurm setting
     parser.add_argument(
@@ -551,22 +483,19 @@ if __name__ == "__main__":
 
     parser.add_argument("--exp", default="SimCLR", type=str, help="Name of experiment")
 
-    # new params
+    # latent params
     parser.add_argument(
         "--out_dim", default=5, type=int, help="feature dimension (default: 5)"
     )
     parser.add_argument(
         "--proj_dim", default=5, type=int, help="projection dimension (default: 5)"
     )
-    parser.add_argument("--multi_chan", default=False, action="store_true")
-    parser.add_argument(
-        "-ns",
-        "--noise_scale",
-        default=1.0,
-        help="how much to scale the noise augmentation (default: 1)",
-    )
 
-    # GPT args
+    # MLP args
+    parser.add_argument("--fc_depth", default=2, type=int)
+    parser.add_argument("--expand_dim", default=16, type=int)
+
+    # SCAM args
     parser.add_argument("--n_layer", default=20, type=int)
     parser.add_argument("--n_head", default=4, type=int)
     parser.add_argument("--n_embd", default=32, type=int)
@@ -576,18 +505,18 @@ if __name__ == "__main__":
 
     parser.add_argument("--dropout", default=0.2, type=float)
     parser.add_argument("--bias", action="store_true")  # default = False
-    parser.add_argument(
-        "--vocab_size", default=50304, type=int
-    )  # default to GPT-2 vocab size
+
     parser.add_argument("--online_head", action="store_true")  # default = False
     parser.add_argument("--ddp", action="store_true")
     parser.add_argument("--rank", default=0, type=int)
     parser.add_argument("--num_extra_chans", default=0, type=int)
-    parser.add_argument(
-        "--knn-freq", default=1, type=int, metavar="N", help="save frequency"
-    )
+    parser.add_argument("--multi_chan", action="store_true")
+    
+    parser.add_argument("--eval-freq", default=1, type=int, metavar="N", help="eval frequency")
+    parser.add_argument("--no_eval", action="store_true")  # default = False
+    parser.add_argument("--eval_on_proj", action="store_true")  # default = False
+
     parser.add_argument("--cell_type", action="store_true")  # default = False
-    parser.add_argument("--no_knn", action="store_true")  # default = False
 
     parser.add_argument("--p_crop", default=0.5, type=float)
     parser.add_argument("--detected_spikes", action="store_true")  # default = False

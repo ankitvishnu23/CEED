@@ -80,29 +80,17 @@ class CausalSelfAttention(nn.Module):
         self.flash = False
         self.tot_chans = config.n_extra_chans * 2 + 1
         if not self.flash:
-            print(
-                "WARNING: using slow attention. Flash Attention requires PyTorch >= 2.0"
-            )
-            # causal mask to ensure that attention is only applied to the left in the input sequence
-            # self.register_buffer("bias", torch.tril(torch.ones(config.block_size, config.block_size))
-            # .view(1, 1, config.block_size, config.block_size))
+            # print(
+            #     "WARNING: using slow attention. Flash Attention requires PyTorch >= 2.0"
+            # )
             # create special causal mask in time dimension
             if config.multi_chan:
-                if config.concat_pos:
-                    assert config.block_size == 122 * self.tot_chans
-                    self.register_buffer(
-                        "bias",
-                        torch.tril(torch.ones(122, 122))
-                        .repeat(self.tot_chans, self.tot_chans)
-                        .view(1, 1, config.block_size, config.block_size),
-                    )
-                else:
-                    self.register_buffer(
-                        "bias",
-                        torch.tril(torch.ones(121, 121))
-                        .repeat(self.tot_chans, self.tot_chans)
-                        .view(1, 1, config.block_size, config.block_size),
-                    )
+                self.register_buffer(
+                    "bias",
+                    torch.tril(torch.ones(121, 121))
+                    .repeat(self.tot_chans, self.tot_chans)
+                    .view(1, 1, config.block_size, config.block_size),
+                )
             else:
                 self.register_buffer(
                     "bias",
@@ -139,15 +127,13 @@ class CausalSelfAttention(nn.Module):
                 v,
                 attn_mask=None,
                 dropout_p=self.dropout if self.training else 0,
-                is_causal=self.is_causal,
             )
         else:
             # manual implementation of attention
             att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
             # print("att:", att.shape)
 
-            if self.is_causal:
-                att = att.masked_fill(self.bias[:, :, :T, :T] == 0, float("-inf"))
+            att = att.masked_fill(self.bias[:, :, :T, :T] == 0, float("-inf"))
             att = F.softmax(att, dim=-1)
             att = self.attn_dropout(att)
             y = att @ v  # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
@@ -226,9 +212,6 @@ class Multi_SCAM(nn.Module):
         self.lm_head = nn.Linear(config.n_embd, config.out_dim, bias=False)
         self.tot_chans = 2 * config.n_extra_chans + 1
 
-        # self.projector = Projector(rep_dim=config.out_dim, proj_dim=config.proj_dim)
-        # self.online_head = nn.Linear(config.out_dim, 10) # 10 classes
-
         # with weight tying when using torch.compile() some warnings get generated:
         # "UserWarning: functional_call was passed multiple values for tied weights.
         # This behavior is deprecated and will be an error in future versions"
@@ -245,6 +228,8 @@ class Multi_SCAM(nn.Module):
                 )
 
         # report number of parameters
+        self.proj = Projector(rep_dim=config.out_dim, proj_dim=config.proj_dim)
+        
         print("number of parameters: %.2fM" % (self.get_num_params() / 1e6,))
 
     def get_num_params(self, non_embedding=True):
@@ -294,6 +279,6 @@ class Multi_SCAM(nn.Module):
         
         logits = self.lm_head(x[:, [-1], :])  # note: using list [-1] to preserve the time dim
         logits = logits.squeeze(dim=1)
-
-        return logits
+        x = self.proj(logits)
+        return x
 

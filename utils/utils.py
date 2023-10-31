@@ -100,27 +100,19 @@ def get_torch_reps(net, data_loader, device, args):
     with torch.no_grad():
         # generate feature bank
         for data, _, target in data_loader:
-            if args.use_chan_pos:
-                data, chan_pos = data
-            else:
-                chan_pos = None
+
             data = data.float()
 
-            if args.use_gpt:
+            if args.arch == 'scam':
                 data = (
                     data.view(-1, (args.num_extra_chans * 2 + 1) * 121)
                     if args.multi_chan
                     else torch.squeeze(data, dim=1)
                 )
-                if args.use_chan_pos:
-                    feature = net(
-                        data.to(device=device, non_blocking=True).unsqueeze(dim=-1),
-                        chan_pos=chan_pos.to(device=device, non_blocking=True),
-                    )
-                else:
-                    feature = net(
-                        data.to(device=device, non_blocking=True).unsqueeze(dim=-1)
-                    )
+                
+                feature = net(
+                    data.to(device=device, non_blocking=True).unsqueeze(dim=-1)
+                )
             else:
                 feature = net(data.to(device=device, non_blocking=True))
                 feature = torch.squeeze(feature)
@@ -156,7 +148,7 @@ def get_torch_reps_nolabels(net, data_loader, device, args):
         # generate feature bank
         for data in data_loader:
             data = data.to(dtype=torch.float32)
-            if args.use_gpt:
+            if args.arch == 'scam':
                 data = (
                     data.view(-1, (args.num_extra_chans * 2 + 1) * 121)
                     if args.multi_chan
@@ -297,24 +289,17 @@ def knn_monitor(
         # generate feature bank
         for data, _, target in memory_data_loader:
             if not args.multi_chan:
-                if args.use_gpt:
+                if args.arch == 'scam':
                     data = torch.squeeze(data, dim=1)
                     data = torch.unsqueeze(data, dim=-1)
             else:
-                if args.use_chan_pos:
-                    data, chan_pos = data
                 data = data.view(-1, int(args.num_extra_chans * 2 + 1) * 121)
                 data = torch.unsqueeze(data, dim=-1)
             data = data.float()
-
-            if args.use_chan_pos:
-                feature = net(
-                    data.to(device=device, non_blocking=True),
-                    chan_pos=chan_pos.to(device=device, non_blocking=True),
-                )
-            else:
-                feature = net(data.to(device=device, non_blocking=True))
+            feature = net(data.to(device=device, non_blocking=True))
+            
             feature = torch.squeeze(feature)
+            
             feature = F.normalize(feature, dim=1)
             feature_bank.append(feature)
         # [D, N]
@@ -329,21 +314,12 @@ def knn_monitor(
                 data = torch.squeeze(data, dim=1)
                 data = torch.unsqueeze(data, dim=-1)
             else:
-                if args.use_chan_pos:
-                    data, chan_pos = data
-                else:
-                    chan_pos = None
                 data = data.view(-1, int(args.num_extra_chans * 2 + 1) * 121)
                 data = torch.unsqueeze(data, dim=-1)
             data = data.float()
 
-            if args.use_chan_pos:
-                feature = net(
-                    data.to(device=device, non_blocking=True),
-                    chan_pos=chan_pos.to(device=device, non_blocking=True),
-                )
-            else:
-                feature = net(data.to(device=device, non_blocking=True))
+            feature = net(data.to(device=device, non_blocking=True))
+            
             feature = torch.squeeze(feature)
             feature = F.normalize(feature, dim=1)
 
@@ -362,46 +338,27 @@ def save_reps(
     ckpt_path,
     split="train",
     multi_chan=False,
-    rep_after_proj=False,
-    use_chan_pos=False,
     suffix="",
 ):
+    ckpt_path=str(ckpt_path)
     ckpt_root_dir = "/".join(ckpt_path.split("/")[:-1])
     model.eval()
     feature_bank = []
     with torch.no_grad():
-        for data, target in loader:
+        for data, _, target in loader:
             if not multi_chan:
                 data = torch.squeeze(data, dim=1)
                 data = torch.unsqueeze(data, dim=-1)
             else:
-                if use_chan_pos:
-                    data, chan_pos = data
-
                 data = data.view(-1, 11 * 121)
                 data = torch.unsqueeze(data, dim=-1)
             data = data.float()
 
-            if use_chan_pos:
-                feature = model(
-                    data.cuda(non_blocking=True),
-                    chan_pos=chan_pos.cuda(non_blocking=True),
-                )
-            else:
-                feature = model(data.cuda(non_blocking=True))
+            feature = model(data.cuda(non_blocking=True))
             feature_bank.append(feature)
 
         feature_bank = torch.cat(feature_bank, dim=0)
-        if rep_after_proj:
-            torch.save(
-                feature_bank,
-                os.path.join(ckpt_root_dir, f"{split}_aftproj_reps{suffix}.pt"),
-            )
-            print(
-                f"saved {split} features to {ckpt_root_dir}/{split}_aftproj_reps{suffix}.pt"
-            )
-        else:
-            torch.save(
-                feature_bank, os.path.join(ckpt_root_dir, f"{split}_reps{suffix}.pt")
-            )
-            print(f"saved {split} features to {ckpt_root_dir}/{split}_reps{suffix}.pt")
+        torch.save(
+            feature_bank, os.path.join(ckpt_root_dir, f"{split}_reps{suffix}.pt")
+        )
+        print(f"saved {split} features to {ckpt_root_dir}/{split}_reps{suffix}.pt")

@@ -45,7 +45,7 @@ class SimCLR(object):
         self.start_epoch = kwargs["start_epoch"]
         self.noise_transform = TorchSmartNoise(
             self.args.data,
-            noise_scale=self.args.noise_scale,
+            noise_scale=self.args.aug_p_dict["smart_noise"][1],
             normalize=self.args.cell_type,
             gpu=self.gpu,
             p=self.args.aug_p_dict["smart_noise"][0],
@@ -107,7 +107,6 @@ class SimCLR(object):
             if self.args.ddp:
                 self.sampler.set_epoch(epoch_counter)
             for i, (wf, chan_nums, lab) in enumerate(train_loader):
-                print(len(wf), len(wf[0]))
                 wf = torch.cat(wf, dim=0).float()
                 chan_nums = np.concatenate(chan_nums, axis=0)
                 lab = torch.cat(lab, dim=0).long().cuda(self.gpu, non_blocking=True)

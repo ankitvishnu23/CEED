@@ -251,7 +251,6 @@ class TorchSmartNoise(object):
             # wf, chan_nums, chan_locs = sample
         else:
             wf = sample
-        print("PROB: ", self.prob)
         if self.prob > torch.rand(1):
             if len(wf.shape) == 2:
                 wf = np.expand_dims(wf, axis=1)

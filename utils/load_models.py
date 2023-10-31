@@ -16,13 +16,7 @@ class Encoder(torch.nn.Module):
         multi_chan=False,
         rep_dim=5,
         proj_dim=5,
-        pos_enc="conseq",
         rep_after_proj=False,
-        use_chan_pos=False,
-        use_merge_layer=False,
-        add_layernorm=False,
-        half_embed_each=False,
-        concat_pos=False,
         num_classes=10,
     ):
         super().__init__()
@@ -37,14 +31,7 @@ class Encoder(torch.nn.Module):
                     dropout=0.2,
                     out_dim=rep_dim,
                     proj_dim=proj_dim,
-                    is_causal=True,
-                    pos=pos_enc,
                     multi_chan=True,
-                    use_chan_pos=use_chan_pos,
-                    use_merge_layer=use_merge_layer,
-                    add_layernorm=add_layernorm,
-                    half_embed_each=half_embed_each,
-                    concat_pos=concat_pos,
                     num_classes=num_classes,
                 )
             else:
@@ -57,14 +44,7 @@ class Encoder(torch.nn.Module):
                     dropout=0.2,
                     out_dim=rep_dim,
                     proj_dim=proj_dim,
-                    is_causal=True,
-                    pos=pos_enc,
                     multi_chan=True,
-                    use_chan_pos=use_chan_pos,
-                    use_merge_layer=use_merge_layer,
-                    add_layernorm=add_layernorm,
-                    half_embed_each=half_embed_each,
-                    concat_pos=concat_pos,
                     num_classes=num_classes,
                 )
         else:
@@ -77,8 +57,6 @@ class Encoder(torch.nn.Module):
                 dropout=0.0,
                 out_dim=rep_dim,
                 proj_dim=proj_dim,
-                is_causal=True,
-                pos=pos_enc,
                 multi_chan=False,
                 num_classes=num_classes,
             )
@@ -108,13 +86,7 @@ def load_ckpt(
     multi_chan=False,
     rep_dim=5,
     proj_dim=5,
-    pos_enc="conseq",
     rep_after_proj=False,
-    use_chan_pos=False,
-    use_merge_layer=False,
-    add_layernorm=False,
-    half_embed_each=False,
-    concat_pos=False,
     num_classes=10,
 ):
     ckpt = torch.load(ckpt_path, map_location=torch.device("cpu"))
@@ -122,13 +94,7 @@ def load_ckpt(
         multi_chan=multi_chan,
         rep_dim=rep_dim,
         proj_dim=proj_dim,
-        pos_enc=pos_enc,
         rep_after_proj=rep_after_proj,
-        use_chan_pos=use_chan_pos,
-        use_merge_layer=use_merge_layer,
-        add_layernorm=add_layernorm,
-        half_embed_each=half_embed_each,
-        concat_pos=concat_pos,
         num_classes=num_classes,
     )
     if multi_chan:

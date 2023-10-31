@@ -41,28 +41,27 @@ class FullyConnectedEnc(nn.Module):
         multichan=False,
     ):
         super().__init__()
-        #   self.proj_dim = out_size if out_size < proj_dim else proj_dim
         self.proj_dim = proj_dim
         self.input_size = input_size
         self.multichan = multichan
-
+        
         self.fcpart = nn.Sequential(
             nn.Linear(input_size, Lv[0]),
             nn.ReLU(),
-            # nn.Dropout(p=0.2),
             nn.Linear(Lv[0], Lv[1]),
             nn.ReLU(),
             nn.Linear(Lv[1], Lv[2]),
             nn.ReLU(),
             nn.Linear(Lv[2], out_size),
-            Projector(rep_dim=out_size, proj_dim=self.proj_dim),
         )
+        self.proj = Projector(rep_dim=out_size, proj_dim=self.proj_dim)
         self.Lv = Lv
 
     def forward(self, x):
         if self.multichan:
             x = x.view(-1, 1, self.input_size)
         x = self.fcpart(x)
+        x = self.proj(x)
         return x
 
     def load(self, fname_model):
@@ -182,120 +181,11 @@ class PositionalEncoding(nn.Module):
             x = x + self.pe[:, :, : x.size(1)]
 
         return self.dropout(x)
-
-
-class MultiChanAttentionEnc(nn.Module):
-    def __init__(
-        self,
-        spike_size=121,
-        n_channels=11,
-        out_size=2,
-        proj_dim=5,
-        fc_depth=2,
-        nlayers=9,
-        nhead=8,
-        dropout=0.1,
-        expand_dim=16,
-        cls_head=None,
-    ):
-        super().__init__()
-        self.spike_size = spike_size
-        self.expand_dim = expand_dim
-        self.n_channels = n_channels
-        self.proj_dim = out_size if out_size < proj_dim else proj_dim
-        if expand_dim != 1:
-            self.encoder = nn.Linear(1, expand_dim)
-        else:
-            nhead = 1
-        self.pos_encoder = PositionalEncoding(
-            expand_dim, dropout, spike_size, num_chans=n_channels
-        )
-        encoder_layers = TransformerEncoderLayer(expand_dim, nhead, 512)
-
-        self.transformer_encoder = TransformerEncoder(encoder_layers, nlayers)
-        self.encoder_sum = nn.Linear(n_channels, 1)
-        list_layers = [
-            nn.Linear(self.spike_size * self.expand_dim, 256),
-            nn.ReLU(inplace=True),
-        ]
-        for _ in range(fc_depth - 2):
-            list_layers += [nn.Linear(256, 256), nn.ReLU(inplace=True)]
-        list_layers += [nn.Linear(256, out_size)]
-        if not cls_head:
-            list_layers += [Projector(rep_dim=out_size, proj_dim=self.proj_dim)]
-        else:
-            print(f"using head = {cls_head}")
-            if cls_head == "linear":
-                self.cls_head = nn.Linear(out_size, 10)
-            elif cls_head == "mlp2":
-                self.cls_head = nn.Sequential(
-                    nn.Linear(out_size, 100), nn.ReLU(inplace=True), nn.Linear(100, 10)
-                )
-            elif cls_head == "mlp3":
-                self.cls_head = nn.Sequential(
-                    nn.Linear(out_size, 100),
-                    nn.ReLU(inplace=True),
-                    nn.Linear(100, 50),
-                    nn.ReLU(inplace=True),
-                    nn.Linear(50, 10),
-                )
-            list_layers += [self.cls_head]
-
-        self.fcpart = nn.Sequential(*list_layers)
-
-    def init_weights(self) -> None:
-        initrange = 0.1
-        # self.encoder.weight.data.uniform_(-initrange, initrange)
-        self.fcpart.bias.data.zero_()
-        self.fpcart.weight.data.uniform_(-initrange, initrange)
-
-    def forward(self, src, src_mask=None):
-        """
-        Args:
-            src: Tensor, shape [batch_size, seq_len]
-            src_mask: Tensor, shape [seq_len, seq_len]
-        Returns:
-            output Tensor of shape [batch_size, proj_dim]
-        """
-
-        if self.expand_dim != 1:
-            src = torch.unsqueeze(src, dim=-1)
-        src = self.pos_encoder(src)  # [B, n_chans, seq_len, embed_dim]
-        src = src.reshape(
-            -1, self.spike_size, self.expand_dim
-        )  # [B * n_chans, seq_len, embed_dim]
-        src = src.permute(
-            1, 0, 2
-        )  # remove batch_first argument needs Batch in second dim
-
-        output = self.transformer_encoder(src, src_mask)
-        output = output.permute(1, 0, 2)
-        output = output.reshape(-1, self.n_channels, self.spike_size * self.expand_dim)
-        output = torch.transpose(output, 1, 2)
-        output = self.encoder_sum(output)
-        output = torch.squeeze(output)
-
-        output = self.fcpart(output)
-        return output
-
-    def load(self, fname_model):
-        checkpoint = torch.load(fname_model, map_location="cpu")
-        state_dict = checkpoint["state_dict"]
-        new_state_dict = OrderedDict()
-        for key in state_dict:
-            # if "backbone" in key and "fc" not in key:
-            new_key = ".".join(key.split(".")[1:])
-            new_state_dict[new_key] = state_dict[key]
-            if "pos_encoder" in key:
-                new_state_dict[new_key] = state_dict[key].transpose(0, 1)
-        self.load_state_dict(new_state_dict)
-        return self
-
+    
 
 model_dict = {
     "fc_encoder": FullyConnectedEnc,
     "conv_encoder": Encoder,
-    "attention_encoder": MultiChanAttentionEnc,
 }
 
 
@@ -313,7 +203,7 @@ class ModelSimCLR(nn.Module):
         input_size=121,
     ):
         super().__init__()
-        if "attention" in base_model:
+        if "scam" in base_model:
             self.backbone = model_dict[base_model](
                 out_size=out_dim,
                 proj_dim=proj_dim,
