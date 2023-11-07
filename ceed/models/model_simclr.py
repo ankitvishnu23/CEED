@@ -45,7 +45,6 @@ class FullyConnectedEnc(nn.Module):
         self.proj_dim = proj_dim
         self.input_size = input_size
         self.multichan = multichan
-        print(old_ckpt)
         if old_ckpt:
             self.fcpart = nn.Sequential(
                 nn.Linear(input_size, Lv[0]),
