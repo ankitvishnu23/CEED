@@ -39,22 +39,35 @@ class FullyConnectedEnc(nn.Module):
         proj_dim=5,
         fc_depth=2,
         multichan=False,
+        old_ckpt=False,
     ):
         super().__init__()
         self.proj_dim = proj_dim
         self.input_size = input_size
         self.multichan = multichan
-        
-        self.fcpart = nn.Sequential(
-            nn.Linear(input_size, Lv[0]),
-            nn.ReLU(),
-            nn.Linear(Lv[0], Lv[1]),
-            nn.ReLU(),
-            nn.Linear(Lv[1], Lv[2]),
-            nn.ReLU(),
-            nn.Linear(Lv[2], out_size),
-        )
-        self.proj = Projector(rep_dim=out_size, proj_dim=self.proj_dim)
+        if old_ckpt:
+            self.fcpart = nn.Sequential(
+                nn.Linear(input_size, Lv[0]),
+                nn.ReLU(),
+                nn.Linear(Lv[0], Lv[1]),
+                nn.ReLU(),
+                nn.Linear(Lv[1], Lv[2]),
+                nn.ReLU(),
+                nn.Linear(Lv[2], out_size),
+                Projector(rep_dim=out_size, proj_dim=self.proj_dim)
+            )
+            self.proj = nn.Identity(proj_dim)
+        else:
+            self.fcpart = nn.Sequential(
+                nn.Linear(input_size, Lv[0]),
+                nn.ReLU(),
+                nn.Linear(Lv[0], Lv[1]),
+                nn.ReLU(),
+                nn.Linear(Lv[1], Lv[2]),
+                nn.ReLU(),
+                nn.Linear(Lv[2], out_size),
+            )
+            self.proj = Projector(rep_dim=out_size, proj_dim=self.proj_dim)
         self.Lv = Lv
 
     def forward(self, x):
@@ -85,6 +98,7 @@ class Encoder(nn.Module):
         proj_dim=5,
         fc_depth=2,
         input_size=121,
+        old_ckpt=False,
     ):
         super().__init__()
         print("init Encoder")
@@ -201,6 +215,7 @@ class ModelSimCLR(nn.Module):
         cls_head=None,
         multichan=True,
         input_size=121,
+        old_ckpt=False,
     ):
         super().__init__()
         if "scam" in base_model:
@@ -218,6 +233,7 @@ class ModelSimCLR(nn.Module):
                 fc_depth=fc_depth,
                 input_size=input_size,
                 multichan=multichan,
+                old_ckpt=old_ckpt,
             )
 
     def _get_basemodel(self, model_name):

@@ -2,7 +2,7 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader
 import numpy as np
-from ceed.models.model_simclr import Encoder, FullyConnectedEnc, MultiChanAttentionEnc
+from ceed.models.model_simclr import Encoder, FullyConnectedEnc
 from analysis.projections import pca_train, pca
 from analysis.plotting import plot_contr_v_pca
 from utils.load_models import get_backbone
@@ -70,13 +70,6 @@ def get_ckpt_results(
     elif enc_type == "fc_encoder":
         Lv = [121, 550, 1100, 250] if Lv is None else Lv
         enc = FullyConnectedEnc(Lv=Lv, out_size=lat_dim).load(ckpt)
-        backbone = get_fcenc_backbone(enc)
-    elif enc_type == "mc_attention_encoder":
-        fc_depth = 2 if fc is None else fc
-        print(fc_depth)
-        enc = MultiChanAttentionEnc(
-            out_size=lat_dim, proj_dim=5, fc_depth=fc_depth, dropout=0.1, expand_dim=16
-        ).load(ckpt)
         backbone = get_fcenc_backbone(enc)
 
     contr_reps_train = get_contr_representations(backbone, train_data)

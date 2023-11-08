@@ -30,6 +30,7 @@ class CEED(object):
         proj_dim: int = 5,
         num_extra_chans: int = 0,
         gpu: int = 0,
+        old_ckpt: bool = False,
     ):
         """
         Parameters
@@ -44,6 +45,8 @@ class CEED(object):
             The number of channels to use on each side of the max amplitude channel for training and getting representations
         gpu : int
             The index of the cuda device being used by the CEED model
+        old_ckpt : bool
+            Checkpoints older than 11/1/2023 are loaded differently (to be deprecated)
         """
 
         self.multi_chan = True if num_extra_chans > 1 else False
@@ -83,6 +86,7 @@ class CEED(object):
                 expand_dim=False,
                 multichan=self.multi_chan,
                 input_size=(2 * num_extra_chans + 1) * 121,
+                old_ckpt=old_ckpt,
             )
         if gpu is not None:
             self.model = self.model.to(gpu)
@@ -410,6 +414,7 @@ class CEED(object):
             multi_chan=self.multi_chan,
             use_gpt=self.ddp,
             num_extra_chans=self.num_extra_chans,
+            arch=self.arch,
         )
 
         reps_test, labels_test = get_torch_reps(self.model, loader, self.device, args)
@@ -444,6 +449,7 @@ class CEED(object):
             multi_chan=self.multi_chan,
             use_gpt=self.ddp,
             num_extra_chans=self.num_extra_chans,
+            arch=self.arch,
         )
 
         reps_test = get_torch_reps_nolabels(self.model, loader, self.device, args)

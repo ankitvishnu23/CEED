@@ -61,3 +61,16 @@ git clone https://github.com/cwindolf/dartsort.git
 cd dartsort
 pip install -r requirements.txt
 ```
+
+## Training and Inference
+### Notebooks
+Please refer to the respective notebook files in `./notebooks` for generating the data, executing training (on a single GPU), and performing inference and analysis. The notebook files are numbered in order.
+
+### Command-line
+Training can also be executed via command-line, for both a single-GPU and multi-GPU set up. 
+* For running on a single GPU:
+  
+```python ./ceed/main.py --data=<path-to-data> --num_extra_chans=5 --arch=fc_encoder --exp=<name-of-expt> ``` 
+* For running on a multi-GPU cluster (we use the submitit package on a SLURM cluster)
+  
+```python ./ceed/launcher.py --data=<path-to-data> --num_extra_chans=5 --arch=scam --exp=<name-of-expt>  ``` 
