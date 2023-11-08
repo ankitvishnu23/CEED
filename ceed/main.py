@@ -95,6 +95,7 @@ def main_worker(gpu, args):
                 "smart_noise": (0.6, 1.0),
             }
     args.multi_chan = True if args.num_extra_chans > 0 else False
+    args.block_size = (2 * args.num_extra_chans + 1) * 121
     
     ds = ContrastiveLearningDataset(
         args.data,
@@ -323,6 +324,7 @@ class SimCLR(nn.Module):
         args.multi_chan = True if args.num_extra_chans > 0 else False
         
         if args.arch == 'scam':
+            args.block_size = (2 * args.num_extra_chans + 1) * 121
             model_args = dict(
                 n_layer=args.n_layer,
                 n_head=args.n_head,
@@ -368,7 +370,7 @@ class SimCLR(nn.Module):
         if self.projector is not None:
             z1 = self.projector(z1)
             z2 = self.projector(z2)
-        z1, z2 = torch.squeeze(z1), torch.squeeze(z2)
+        z1, z2 = torch.squeeze(z1, dim=1), torch.squeeze(z2, dim=1)
         loss = infoNCE(z1, z2) / 2 + infoNCE(z2, z1) / 2
         
         return loss
@@ -498,7 +500,7 @@ if __name__ == "__main__":
     # SCAM args
     parser.add_argument("--n_layer", default=20, type=int)
     parser.add_argument("--n_head", default=4, type=int)
-    parser.add_argument("--n_embd", default=32, type=int)
+    parser.add_argument("--n_embd", default=64, type=int)
     parser.add_argument(
         "--block_size", default=121, type=int
     )  # this is the max sequence length

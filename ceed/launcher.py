@@ -44,7 +44,7 @@ parser.add_argument(
 )
 parser.add_argument(
     "--learning-rate",
-    default=0.001,
+    default=0.0001,
     type=float,
     metavar="LR",
     help="base learning rate",
@@ -91,7 +91,7 @@ parser.add_argument("--expand_dim", default=16, type=int)
 # SCAM args
 parser.add_argument("--n_layer", default=20, type=int)
 parser.add_argument("--n_head", default=4, type=int)
-parser.add_argument("--n_embd", default=32, type=int)
+parser.add_argument("--n_embd", default=64, type=int)
 parser.add_argument(
     "--block_size", default=121, type=int
 )  # this is the max sequence length
@@ -137,7 +137,7 @@ parser.add_argument('--nodes', default=5, type=int, metavar='N',
                     help='number of nodes')
 parser.add_argument("--timeout", default=360, type=int,
                     help="Duration of the job")
-parser.add_argument("--partition", default="xxx", type=str,
+parser.add_argument("--partition", default="el8", type=str,
                     help="Partition where to submit")
 
 parser.add_argument("--exp", default="expt_name", type=str,
@@ -148,7 +148,7 @@ class Trainer(object):
         self.args = args
 
     def __call__(self):
-        import main
+        import ceed.main as main
         self._setup_gpu_args()
         main.main_worker(self.args.gpu, self.args)
 
