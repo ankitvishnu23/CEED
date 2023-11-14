@@ -566,7 +566,7 @@ def extract_IBL(
     assert (
         type(rec) == si.binaryfolder.BinaryFolderRecording
     ), "rec must be a BinaryFolderRecording"
-    one = ONE()
+    one = ONE(base_url='https://openalyx.internationalbrainlab.org')
     ba = AllenAtlas()
 
     sl = SpikeSortingLoader(pid=pid, one=one, atlas=ba)
