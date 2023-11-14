@@ -484,7 +484,7 @@ def download_IBL(pid, save_folder, cache_folder=None, t_window=[0, 500], overwri
     metadata_file: str
         absolute path location of corresponding metadata file for IBL session
     """
-    one = ONE()
+    one =  ONE(base_url='https://openalyx.internationalbrainlab.org')
     eid, probe = one.pid2eid(pid)
     band = "ap"  # either 'ap' or 'lf'
     # Use IBL streamer to download the data
