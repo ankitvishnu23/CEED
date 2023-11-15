@@ -243,8 +243,6 @@ class SimCLR(object):
                 os.path.join(self.args.checkpoint_dir, "final.pth"),
                 split="test",
                 multi_chan=self.multichan,
-                rep_after_proj=True,
-                use_chan_pos=False,
                 suffix="",
             )
             save_reps(
@@ -253,7 +251,5 @@ class SimCLR(object):
                 os.path.join(self.args.checkpoint_dir, "final.pth"),
                 split="train",
                 multi_chan=self.multichan,
-                rep_after_proj=True,
-                use_chan_pos=False,
                 suffix="",
             )

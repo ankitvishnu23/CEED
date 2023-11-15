@@ -215,6 +215,7 @@ class WFDataset_lab(Dataset):
             )
             print(f"Units: {n_units}")
             unique_labels = np.unique(self.targets)
+            print(unique_labels)
             bad_units = np.array([unit for unit in units if unit not in unique_labels])
             assert (
                 len(bad_units) == 0
