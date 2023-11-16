@@ -465,7 +465,9 @@ def save_real_covs(
     np.save(os.path.join(save_path, "temporal_cov.npy"), temporal_cov)
 
 
-def download_IBL(pid, save_folder, cache_folder=None, t_window=[0, 500], overwrite=True):
+def download_IBL(
+        pid, save_folder, cache_folder=None, t_window=[0, 500], overwrite=True, do_spikeinterface_destripe=True
+    ):
     """Extract and format data from a specific IBL session.
     Parameters
     ----------
@@ -516,17 +518,60 @@ def download_IBL(pid, save_folder, cache_folder=None, t_window=[0, 500], overwri
             rec = si.read_binary_folder(save_folder)
             return rec, metadata_file
             print("done preprocessing")
-    rec = si.read_cbin_ibl(sr.target_dir)
-    # preprocessing (mimic IBL's pipeline with spikeinterface)
-    print("preprocessing (mimic IBL's pipeline with spikeinterface)")
-    rec = si.highpass_filter(rec)
-    rec = si.phase_shift(rec)
-    bad_channel_ids, channel_labels = si.detect_bad_channels(rec)
-    rec = si.interpolate_bad_channels(rec, bad_channel_ids)
-    rec = si.highpass_spatial_filter(rec)
-    rec = si.zscore(rec, num_chunks_per_segment=50, mode="mean+std")
+    
+    if do_spikeinterface_destripe:
+        rec = si.read_cbin_ibl(sr.target_dir)
+        # preprocessing (mimic IBL's pipeline with spikeinterface)
+        print("preprocessing (mimic IBL's pipeline with spikeinterface)")
+        rec = si.highpass_filter(rec)
+        rec = si.phase_shift(rec)
+        bad_channel_ids, channel_labels = si.detect_bad_channels(rec)
+        rec = si.interpolate_bad_channels(rec, bad_channel_ids)
+        rec = si.highpass_spatial_filter(rec)
+        rec = si.zscore(rec, num_chunks_per_segment=50, mode="mean+std")
 
-    rec = rec.save(folder=save_folder, n_jobs=5, chunk_duration="1s")
+        rec = rec.save(folder=save_folder, n_jobs=5, chunk_duration="1s")
+    else:
+        print("running destriping")
+        sr = spikeglx.Reader(binary)
+        h = sr.geometry
+        batch_size_secs = 1
+        assert sr.rl > 80, "download window must be larger than 4"
+        batch_intervals_secs = 50
+        # scans the file at constant interval, with a demi batch starting offset
+        nbatches = int(
+            np.floor((sr.rl - batch_size_secs) / batch_intervals_secs - 0.5)
+        )
+        wrots = np.zeros((nbatches, sr.nc - sr.nsync, sr.nc - sr.nsync))
+        for ibatch in trange(nbatches, desc="destripe batches"):
+            ifirst = int(
+                (ibatch + 0.5) * batch_intervals_secs * sr.fs
+                + batch_intervals_secs
+            )
+            ilast = ifirst + int(batch_size_secs * sr.fs)
+            sample = voltage.destripe(
+                sr[ifirst:ilast, : -sr.nsync].T, fs=sr.fs, neuropixel_version=1
+            )
+            np.fill_diagonal(
+                wrots[ibatch, :, :],
+                1 / rms(sample) * sr.sample2volts[: -sr.nsync],
+            )
+
+        wrot = np.median(wrots, axis=0)
+        voltage.decompress_destripe_cbin(
+            sr.file_bin,
+            h=h,
+            wrot=wrot,
+            output_file=standardized_file,
+            dtype=np.float32,
+            nc_out=sr.nc - sr.nsync,
+        )
+        # also copy the companion meta-data file
+        metadata_file = standardized_file.parent.joinpath(
+                f"{sr.file_meta_data.stem}.normalized.meta"
+            )
+        rec = si.read_binary_folder(save_folder)
+
     print("done preprocessing")
     # also copy the companion meta-data file
     shutil.copy(
