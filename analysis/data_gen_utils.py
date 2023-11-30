@@ -494,6 +494,24 @@ def download_IBL(
     # Use IBL streamer to download the data
     sr = Streamer(pid=pid, one=one, cache_folder=cache_folder, remove_cached=overwrite, typ=band)
     sr._download_raw_partial(first_chunk=t_window[0], last_chunk=t_window[1] - 1)
+    
+    #change file names to work with ibl and spike interface
+    files = os.listdir(sr.target_dir)
+    print('Old dir: ', os.listdir(sr.target_dir))
+    #if no files are in the ap.cbin format, run the replacement
+    if not any([file.endswith('ap.cbin') for file in files]):
+        print('converting files to drop "stream" from path')
+        for file in files:
+            #remove .stream from file name
+            new_name = file.replace('.stream', '') 
+            os.rename((str(sr.target_dir) + '/' + file), (str(sr.target_dir) + '/' + new_name)) 
+           
+            #create a new, empty, file with the old name. This is so the ibl loader wont rerun when it sees .stream files are missing
+            with open(os.path.join(sr.target_dir, file), 'w') as fp: 
+                pass
+        print('New dir: ', os.listdir(sr.target_dir))
+    
+    
     sr.file_bin = sr.target_dir / "_spikeglx_ephysData_g0_t0.imec0.ap.cbin"
     binary = Path(sr.file_bin)
     folder = Path(save_folder)   
@@ -521,22 +539,6 @@ def download_IBL(
             return rec, metadata_file
             print("done preprocessing")
             
-            
-    #change file names to work with ibl and spike interface
-    files = os.listdir(sr.target_dir)
-    print('Old dir: ', os.listdir(sr.target_dir))
-    #if no files are in the ap.cbin format, run the replacement
-    if not any([file.endswith('ap.cbin') for file in files]):
-        print('converting files to drop "stream" from path')
-        for file in files:
-            #remove .stream from file name
-            new_name = file.replace('.stream', '') 
-            os.rename((str(sr.target_dir) + '/' + file), (str(sr.target_dir) + '/' + new_name)) 
-            
-            #create a new, empty, file with the old name. This is so the ibl loader wont rerun when it sees .stream files are missing
-            with open(os.path.join(sr.target_dir, file), 'w') as fp: 
-                pass
-        print('New dir: ', os.listdir(sr.target_dir))
         
     
     if do_spikeinterface_destripe:
