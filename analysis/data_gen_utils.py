@@ -486,7 +486,8 @@ def download_IBL(
     metadata_file: str
         absolute path location of corresponding metadata file for IBL session
     """
-    one =  ONE(base_url='https://openalyx.internationalbrainlab.org')
+    ONE.setup(base_url='https://openalyx.internationalbrainlab.org', silent=True)
+    one = ONE(password='international')
     eid, probe = one.pid2eid(pid)
     band = "ap"  # either 'ap' or 'lf'
     # Use IBL streamer to download the data
@@ -611,7 +612,8 @@ def extract_IBL(
     assert (
         type(rec) == si.binaryfolder.BinaryFolderRecording
     ), "rec must be a BinaryFolderRecording"
-    one = ONE(base_url='https://openalyx.internationalbrainlab.org')
+    ONE.setup(base_url='https://openalyx.internationalbrainlab.org', silent=True)
+    one = ONE(password='international')
     ba = AllenAtlas()
 
     sl = SpikeSortingLoader(pid=pid, one=one, atlas=ba)
