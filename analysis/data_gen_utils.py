@@ -12,6 +12,7 @@ import datetime
 import numpy as np
 import shutil
 from scipy.spatial.distance import pdist, squareform
+from scipy import stats
 from matplotlib.gridspec import GridSpec
 from tqdm import tqdm
 import torch
@@ -44,7 +45,8 @@ except ImportError:
 
 """
 
-Functions taken from YASS: Yet Another Spike Sorter -  https://github.com/paninski-lab/yass#yass-yet-another-spike sorter
+Next three functions taken from YASS: Yet Another Spike Sorter -  
+https://github.com/paninski-lab/yass#yass-yet-another-spike-sorter
 
 """
 
@@ -921,7 +923,7 @@ def make_dataset(
         absolute location in which the dataset will be saved (dir will be created if nonexistent)
     we: SpikeInterface waveform extractor object
     templates: numpy.ndarray
-        templates of each of the neurons in recording window
+        templates of each of the neurons in recording window. if not provided then an unshifted dataset will be created. 
     chan_index: numpy.ndarray
     num_chans_extract: int
         the total number of neighboring channels to extract per waveform, centered on the max amplitude channel
@@ -969,6 +971,8 @@ def make_dataset(
     if we is not None:
         depth_order = np.argsort(geom[:, 2])
         geom = geom[depth_order]
+    if chan_index is not None:
+        chan_index = make_contiguous_channel_index(geom.shape[0], n_neighbors=40)
     num_waveforms = train_num + val_num + test_num
     SMALL_SIZE = 14
     MEDIUM_SIZE = 18
@@ -1101,11 +1105,16 @@ def make_dataset(
                 )
                 waveforms = waveforms[:num_waveforms]
 
-            mc = np.unique(spike_index[np.where(spike_index[:, 2] == unit_id)[0], 1])[0]
-            mc = templates[unit_id].ptp(0).argmax()
-            mcs_template = (
-                templates[unit_id].ptp(0).argsort()[::-1][:num_template_amps_shift]
-            )
+            if templates is None:
+                mc = stats.mode(spike_index[np.where(spike_index[:, 2] == unit_id)[0], 1])[0][0]
+                mc_shift_start = max(mc - num_template_amps_shift//2, 0)
+                mc_shift_end = min(mc_curr + num_template_amps_shift//2, tot_num_chans)
+                mcs_template = np.arange(mc_shift_start, mc_shift_end)
+            else:
+                mc = templates[unit_id].ptp(0).argmax()
+                mcs_template = (
+                    templates[unit_id].ptp(0).argsort()[::-1][:num_template_amps_shift]
+                )
             shifts = np.abs(waveforms[:, :, mcs_template]).max(1).argmax(1)
             mcs_shifted = mcs_template[shifts]
 
