@@ -18,9 +18,6 @@ from tqdm import tqdm
 import torch
 from pathlib import Path
 from tqdm.auto import trange
-import shutil
-import spikeinterface.full as si
-import os
 
 try:
     import brainbox.io.one as bbone
@@ -596,7 +593,7 @@ def download_IBL(
         metadata_file = standardized_file.parent.joinpath(
                 f"{sr.file_meta_data.stem}.normalized.meta"
             )
-        rec = si.read_binary_folder(save_folder)
+        rec = si.read_binary(standardized_file, sr.fs, 'float', sr.nc - sr.nsync)
 
     print("done preprocessing")
     # also copy the companion meta-data file
@@ -635,8 +632,9 @@ def extract_IBL(
     templates: numpy.ndarray
     """
     assert (
-        type(rec) == si.binaryfolder.BinaryFolderRecording
-    ), "rec must be a BinaryFolderRecording"
+        type(rec) == si.binaryfolder.BinaryFolderRecording or 
+        type(rec) == si.binaryrecordingextractor.BinaryRecordingExtractor
+    ), "rec must be a BinaryFolderRecording or BinaryRecordingExtractor"
     ONE.setup(base_url='https://openalyx.internationalbrainlab.org', silent=True)
     one = ONE(password='international')
     ba = AllenAtlas()
@@ -953,8 +951,9 @@ def make_dataset(
         random seed for waveform extraction
     """
     assert (
-        type(rec) == si.binaryfolder.BinaryFolderRecording
-    ), "rec must be a BinaryFolderRecording"
+        type(rec) == si.binaryfolder.BinaryFolderRecording or 
+        type(rec) == si.binaryrecordingextractor.BinaryRecordingExtractor
+    ), "rec must be a BinaryFolderRecording or BinaryRecordingExtractor"
     np.random.seed(random_seed)
     num_waveforms = train_num + val_num + test_num
     spikes_array = []
@@ -1006,7 +1005,7 @@ def make_dataset(
             )
             np.save(os.path.join(covariance_path, "spatial_cov.npy"), spatial_cov)
             np.save(os.path.join(covariance_path, "temporal_cov.npy"), temporal_cov)
-    bin_path = rec._bin_kwargs["file_paths"][0]
+    bin_path = rec._bin_kwargs["file_paths"][0] if type(rec) == si.binaryfolder.BinaryFolderRecording else rec._kwargs["file_paths"][0]
 
     # for the extracted spikes dataset
     if extracted_spikes:
