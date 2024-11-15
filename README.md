@@ -1,5 +1,7 @@
 # CEED
-Towards robust and generalizable representations of extracellular data using contrastive learning
+Towards robust and generalizable representations of extracellular data using contrastive learning (published at NeurIPS 2023)
+
+paper: https://proceedings.neurips.cc/paper_files/paper/2023/hash/83c637c3bc0ca88eda6cf4f5f45bdced-Abstract-Conference.html
 
 ## Getting Started
 This repo provides tools for training, evaluating, and visualizing a contrastive learning based model for extracellular 
